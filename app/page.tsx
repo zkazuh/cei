@@ -2,29 +2,22 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/components/auth-provider"
+import { isAuthenticated } from "@/lib/auth"
 
 export default function HomePage() {
-  const { user, isLoading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading) {
-      if (user) {
-        router.push("/ceiromao")
-      } else {
-        router.push("/login")
-      }
+    if (isAuthenticated()) {
+      router.push("/ceiromao")
+    } else {
+      router.push("/login")
     }
-  }, [user, isLoading, router])
+  }, [router])
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    )
-  }
-
-  return null
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+    </div>
+  )
 }

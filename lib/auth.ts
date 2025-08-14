@@ -1,29 +1,27 @@
-import { supabase } from "./supabase"
-import type { User } from "./supabase"
-
-export async function signIn(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
-  try {
-    // For demo purposes, we'll use a simple authentication
-    // In production, you'd want proper password hashing
-    const { data, error } = await supabase.from("users").select("*").eq("email", email).single()
-
-    if (error || !data) {
-      return { user: null, error: "Invalid credentials" }
-    }
-
-    // In a real app, you'd verify the password hash here
-    // For demo, we'll accept any password for existing users
-    return { user: data, error: null }
-  } catch (error) {
-    return { user: null, error: "Authentication failed" }
-  }
+interface User {
+  id: string
+  email: string
+  role: string
 }
 
-export async function signOut(): Promise<void> {
-  // In a real app, you'd handle session cleanup here
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("user")
+export function login(email: string, password: string): User | null {
+  // Demo authentication - in production, this would validate against a real backend
+  const demoUsers = [
+    { id: "1", email: "admin@ceiromao.com", role: "admin" },
+    { id: "2", email: "hr@ceiromao.com", role: "hr" },
+    { id: "3", email: "teacher@ceiromao.com", role: "teacher" },
+  ]
+
+  const user = demoUsers.find((u) => u.email === email)
+  if (user) {
+    localStorage.setItem("user", JSON.stringify(user))
+    return user
   }
+  return null
+}
+
+export function logout(): void {
+  localStorage.removeItem("user")
 }
 
 export function getCurrentUser(): User | null {
@@ -39,8 +37,6 @@ export function getCurrentUser(): User | null {
   }
 }
 
-export function setCurrentUser(user: User): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("user", JSON.stringify(user))
-  }
+export function isAuthenticated(): boolean {
+  return getCurrentUser() !== null
 }

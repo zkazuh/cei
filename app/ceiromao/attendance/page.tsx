@@ -231,6 +231,8 @@ export default function AttendancePage() {
         description: "Failed to add justification. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      setIsUpdating(null)
     }
   }
 
@@ -271,9 +273,10 @@ export default function AttendancePage() {
           <Calendar className="h-8 w-8" />
           Attendance
         </h1>
-        <p className="text-muted-foreground">Track and manage employee attendance</p>
+        <p className="text-muted-foreground">Track and manage employee attendance records</p>
       </div>
 
+      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -282,29 +285,29 @@ export default function AttendancePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalEmployees}</div>
-            <p className="text-xs text-muted-foreground">Out of 28 employees</p>
+            <p className="text-xs text-muted-foreground">Employees present</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Present</CardTitle>
+            <CardTitle className="text-sm font-medium">On Time</CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{stats.presentCount}</div>
-            <p className="text-xs text-muted-foreground">On time arrivals</p>
+            <p className="text-xs text-muted-foreground">Punctual arrivals</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Late</CardTitle>
+            <CardTitle className="text-sm font-medium">Late Arrivals</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">{stats.lateCount}</div>
-            <p className="text-xs text-muted-foreground">Late arrivals</p>
+            <p className="text-xs text-muted-foreground">Late today</p>
           </CardContent>
         </Card>
 
@@ -315,7 +318,7 @@ export default function AttendancePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{stats.absentCount}</div>
-            <p className="text-xs text-muted-foreground">Not present today</p>
+            <p className="text-xs text-muted-foreground">Not present</p>
           </CardContent>
         </Card>
       </div>
@@ -323,15 +326,12 @@ export default function AttendancePage() {
       <Card>
         <CardHeader>
           <CardTitle>Attendance Management</CardTitle>
-          <CardDescription>
-            This feature is coming soon. You'll be able to track daily attendance, generate reports, and manage employee
-            schedules.
-          </CardDescription>
+          <CardDescription>Attendance tracking features will be implemented here</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8">
             <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">Attendance tracking features will be available soon.</p>
+            <p className="text-muted-foreground">Attendance management coming soon...</p>
           </div>
         </CardContent>
       </Card>

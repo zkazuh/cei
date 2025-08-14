@@ -3,39 +3,39 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import { getCurrentUser, setCurrentUser } from "@/lib/auth"
-import type { User } from "@/lib/supabase"
+import { getCurrentUser, logout } from "@/lib/auth"
+
+interface User {
+  id: string
+  email: string
+  role: string
+}
 
 interface AuthContextType {
   user: User | null
-  setUser: (user: User | null) => void
   isLoading: boolean
+  logout: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUserState] = useState<User | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
-    setUserState(currentUser)
+    setUser(currentUser)
     setIsLoading(false)
   }, [])
 
-  const setUser = (user: User | null) => {
-    setUserState(user)
-    if (user) {
-      setCurrentUser(user)
-    } else {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("user")
-      }
-    }
+  const handleLogout = () => {
+    logout()
+    setUser(null)
+    window.location.href = "/login"
   }
 
-  return <AuthContext.Provider value={{ user, setUser, isLoading }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, isLoading, logout: handleLogout }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

@@ -2,19 +2,21 @@
 
 import type React from "react"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "./auth-provider"
+import { isAuthenticated } from "@/lib/auth"
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isAuthenticated()) {
       router.push("/login")
+    } else {
+      setIsLoading(false)
     }
-  }, [user, isLoading, router])
+  }, [router])
 
   if (isLoading) {
     return (
@@ -22,10 +24,6 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
     )
-  }
-
-  if (!user) {
-    return null
   }
 
   return <>{children}</>

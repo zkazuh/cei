@@ -5,7 +5,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Types
 export interface User {
   id: string
   email: string
@@ -36,7 +35,6 @@ export interface Attendance {
   notes?: string
   created_at: string
   updated_at: string
-  employee?: Employee
 }
 
 export interface ActivityFile {
@@ -49,7 +47,6 @@ export interface ActivityFile {
   upload_date: string
   created_at: string
   updated_at: string
-  employee?: Employee
 }
 
 export interface MonthlyFileRequirement {
@@ -63,8 +60,6 @@ export interface MonthlyFileRequirement {
   activity_file_id?: string
   created_at: string
   updated_at: string
-  employee?: Employee
-  activity_file?: ActivityFile
 }
 
 export interface ActivityLog {

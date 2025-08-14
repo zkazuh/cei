@@ -1,4 +1,4 @@
--- Complete working system setup
+-- Complete working system setup - Version 16
 -- Drop existing tables if they exist
 DROP TABLE IF EXISTS activity_logs CASCADE;
 DROP TABLE IF EXISTS activity_files CASCADE;
@@ -17,7 +17,7 @@ CREATE TABLE users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create employees table
+-- Create employees table with correct structure
 CREATE TABLE employees (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
@@ -100,38 +100,58 @@ INSERT INTO employees (name, employee_number, department, position, hire_date, s
 ('Lucia Mendes', 'EMP007', 'Education', 'History Teacher', '2023-07-15', 'active', 'teacher'),
 ('Carlos Rodrigues', 'EMP008', 'Administration', 'Accountant', '2023-04-10', 'active', 'regular');
 
--- Insert sample attendance data
-INSERT INTO attendance (employee_id, date, status, hours_worked) 
-SELECT 
-    e.id,
-    CURRENT_DATE - INTERVAL '1 day' * generate_series(0, 29),
-    CASE 
-        WHEN random() < 0.1 THEN 'absent'
-        WHEN random() < 0.05 THEN 'late'
-        ELSE 'present'
-    END,
-    CASE 
-        WHEN random() < 0.1 THEN 0
-        WHEN random() < 0.05 THEN 6
-        ELSE 8
-    END
-FROM employees e
-WHERE e.status = 'active';
+-- Insert sample attendance data (fixed CASE statement)
+DO $$
+DECLARE
+    emp_record RECORD;
+    day_offset INTEGER;
+    random_val FLOAT;
+BEGIN
+    FOR emp_record IN SELECT id FROM employees WHERE status = 'active' LOOP
+        FOR day_offset IN 0..29 LOOP
+            random_val := random();
+            INSERT INTO attendance (employee_id, date, status, hours_worked) VALUES (
+                emp_record.id,
+                CURRENT_DATE - INTERVAL '1 day' * day_offset,
+                CASE 
+                    WHEN random_val < 0.1 THEN 'absent'
+                    WHEN random_val < 0.15 THEN 'late'
+                    ELSE 'present'
+                END,
+                CASE 
+                    WHEN random_val < 0.1 THEN 0
+                    WHEN random_val < 0.15 THEN 6
+                    ELSE 8
+                END
+            );
+        END LOOP;
+    END LOOP;
+END $$;
 
--- Insert sample monthly requirements for teachers
-INSERT INTO monthly_file_requirements (employee_id, year, month, due_date, status)
-SELECT 
-    e.id,
-    2024,
-    generate_series(1, 12),
-    make_date(2024, generate_series(1, 12), 15),
-    CASE 
-        WHEN generate_series(1, 12) < EXTRACT(month FROM CURRENT_DATE) THEN 
-            CASE WHEN random() < 0.7 THEN 'submitted' ELSE 'overdue' END
-        ELSE 'pending'
-    END
-FROM employees e
-WHERE e.category = 'teacher' AND e.status = 'active';
+-- Insert sample monthly requirements for teachers (fixed CASE statement)
+DO $$
+DECLARE
+    emp_record RECORD;
+    month_num INTEGER;
+    random_val FLOAT;
+BEGIN
+    FOR emp_record IN SELECT id FROM employees WHERE category = 'teacher' AND status = 'active' LOOP
+        FOR month_num IN 1..12 LOOP
+            random_val := random();
+            INSERT INTO monthly_file_requirements (employee_id, year, month, due_date, status) VALUES (
+                emp_record.id,
+                2024,
+                month_num,
+                make_date(2024, month_num, 15),
+                CASE 
+                    WHEN month_num < EXTRACT(month FROM CURRENT_DATE) THEN 
+                        CASE WHEN random_val < 0.7 THEN 'submitted' ELSE 'overdue' END
+                    ELSE 'pending'
+                END
+            );
+        END LOOP;
+    END LOOP;
+END $$;
 
 -- Create indexes for better performance
 CREATE INDEX idx_employees_status ON employees(status);

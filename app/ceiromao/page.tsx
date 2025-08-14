@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getEmployeeStats } from "@/lib/employees"
 import { getTeacherFileStats } from "@/lib/teacher-files"
-import { Users, GraduationCap, Building2, FileText, CheckCircle, Clock, AlertCircle } from "lucide-react"
+import { Users, FileText, Clock, CheckCircle, AlertTriangle, Building2 } from "lucide-react"
 
 export default function DashboardPage() {
   const [employeeStats, setEmployeeStats] = useState({
@@ -14,26 +14,30 @@ export default function DashboardPage() {
     byDepartment: {} as Record<string, number>,
     byCategory: {} as Record<string, number>,
   })
+
   const [fileStats, setFileStats] = useState({
-    totalRequirements: 0,
+    total: 0,
     submitted: 0,
     pending: 0,
     overdue: 0,
-    byMonth: {} as Record<string, { submitted: number; pending: number; overdue: number }>,
+    byMonth: {} as Record<string, number>,
   })
+
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    loadStats()
+    loadDashboardData()
   }, [])
 
-  const loadStats = async () => {
+  const loadDashboardData = async () => {
+    setIsLoading(true)
     try {
       const [empStats, teacherStats] = await Promise.all([getEmployeeStats(), getTeacherFileStats()])
+
       setEmployeeStats(empStats)
       setFileStats(teacherStats)
     } catch (error) {
-      console.error("Error loading dashboard stats:", error)
+      console.error("Error loading dashboard data:", error)
     } finally {
       setIsLoading(false)
     }
@@ -51,7 +55,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome to the CEIROMAO HR Portal</p>
+        <p className="text-muted-foreground">Overview of CEIROMAO HR Portal activities and statistics</p>
       </div>
 
       {/* Employee Stats */}
@@ -81,7 +85,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Teachers</CardTitle>
-            <GraduationCap className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{employeeStats.byCategory.teacher || 0}</div>
@@ -101,16 +105,16 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* File Stats */}
+      {/* Teacher Files Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">File Requirements</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Requirements</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{fileStats.totalRequirements}</div>
-            <p className="text-xs text-muted-foreground">Total requirements</p>
+            <div className="text-2xl font-bold">{fileStats.total}</div>
+            <p className="text-xs text-muted-foreground">All file requirements</p>
           </CardContent>
         </Card>
 
@@ -139,7 +143,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{fileStats.overdue}</div>
@@ -158,7 +162,7 @@ export default function DashboardPage() {
           <CardContent>
             <div className="space-y-2">
               {Object.entries(employeeStats.byDepartment).map(([department, count]) => (
-                <div key={department} className="flex items-center justify-between">
+                <div key={department} className="flex justify-between items-center">
                   <span className="text-sm font-medium">{department}</span>
                   <span className="text-sm text-muted-foreground">{count}</span>
                 </div>
@@ -170,12 +174,12 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Employees by Category</CardTitle>
-            <CardDescription>Distribution of employees by employment type</CardDescription>
+            <CardDescription>Breakdown of employee categories</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               {Object.entries(employeeStats.byCategory).map(([category, count]) => (
-                <div key={category} className="flex items-center justify-between">
+                <div key={category} className="flex justify-between items-center">
                   <span className="text-sm font-medium capitalize">{category}</span>
                   <span className="text-sm text-muted-foreground">{count}</span>
                 </div>
