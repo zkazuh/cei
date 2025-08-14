@@ -2,26 +2,25 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/components/auth-provider"
-import { Loader2 } from "lucide-react"
+import { isAuthenticated } from "@/lib/auth"
 
 export default function HomePage() {
-  const { user, loading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading) {
-      if (user) {
-        router.push("/ceiromao")
-      } else {
-        router.push("/login")
-      }
+    if (isAuthenticated()) {
+      router.push("/ceiromao")
+    } else {
+      router.push("/login")
     }
-  }, [user, loading, router])
+  }, [router])
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="text-center">
+        <h1 className="text-2xl font-bold mb-4">Ceiromao HR Portal</h1>
+        <p>Redirecting...</p>
+      </div>
     </div>
   )
 }

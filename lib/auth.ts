@@ -1,79 +1,59 @@
-// Demo users for authentication (in production, use proper password hashing)
-const DEMO_USERS = [
-  { email: "admin@ceiromao.com", password: "admin123", role: "admin", name: "Administrator" },
-  { email: "employee@ceiromao.com", password: "emp123", role: "user", name: "Employee User" },
-  { email: "maria@ceiromao.com", password: "maria123", role: "user", name: "Maria Silva" },
-  { email: "carlos@ceiromao.com", password: "carlos123", role: "user", name: "Carlos Santos" },
-  { email: "ana@ceiromao.com", password: "ana123", role: "user", name: "Ana Costa" },
-  { email: "pedro@ceiromao.com", password: "pedro123", role: "user", name: "Pedro Lima" },
-  { email: "sofia@ceiromao.com", password: "sofia123", role: "user", name: "Sofia Oliveira" },
-  { email: "joao@ceiromao.com", password: "joao123", role: "user", name: "João Pereira" },
-]
-
-export interface AuthUser {
+export interface User {
   id: string
   email: string
   name: string
   role: string
 }
 
-export async function signIn(email: string, password: string): Promise<AuthUser | null> {
+export async function login(email: string, password: string): Promise<User | null> {
   try {
-    // Check demo users first
-    const demoUser = DEMO_USERS.find((u) => u.email === email && u.password === password)
-    if (demoUser) {
-      const authUser: AuthUser = {
-        id: `demo-${email}`,
-        email: demoUser.email,
-        name: demoUser.name,
-        role: demoUser.role,
+    // For demo purposes, we'll use hardcoded credentials
+    // In production, you would hash passwords and check against the database
+    const demoUsers = [
+      { email: "admin@ceiromao.com", password: "admin123", name: "Administrator", role: "admin" },
+      { email: "employee@ceiromao.com", password: "emp123", name: "Employee User", role: "user" },
+      { email: "maria@ceiromao.com", password: "maria123", name: "Maria Silva", role: "user" },
+      { email: "carlos@ceiromao.com", password: "carlos123", name: "Carlos Santos", role: "user" },
+      { email: "ana@ceiromao.com", password: "ana123", name: "Ana Costa", role: "user" },
+      { email: "pedro@ceiromao.com", password: "pedro123", name: "Pedro Lima", role: "user" },
+      { email: "sofia@ceiromao.com", password: "sofia123", name: "Sofia Oliveira", role: "user" },
+    ]
+
+    const user = demoUsers.find((u) => u.email === email && u.password === password)
+
+    if (user) {
+      const userData = {
+        id: `user_${Date.now()}`,
+        email: user.email,
+        name: user.name,
+        role: user.role,
       }
 
-      // Store in localStorage for persistence
-      localStorage.setItem("auth_user", JSON.stringify(authUser))
-      return authUser
+      // Store in localStorage for demo
+      localStorage.setItem("user", JSON.stringify(userData))
+      return userData
     }
-
-    // In production, you would check against the database
-    // const { data, error } = await supabase
-    //   .from("users")
-    //   .select("*")
-    //   .eq("email", email)
-    //   .single()
 
     return null
   } catch (error) {
-    console.error("Sign in error:", error)
+    console.error("Login error:", error)
     return null
   }
 }
 
-export async function signOut(): Promise<void> {
-  try {
-    localStorage.removeItem("auth_user")
-  } catch (error) {
-    console.error("Sign out error:", error)
-  }
+export function logout(): void {
+  localStorage.removeItem("user")
 }
 
-export function getCurrentUser(): AuthUser | null {
+export function getCurrentUser(): User | null {
   try {
-    const stored = localStorage.getItem("auth_user")
-    if (stored) {
-      return JSON.parse(stored)
-    }
-    return null
-  } catch (error) {
-    console.error("Get current user error:", error)
+    const userStr = localStorage.getItem("user")
+    return userStr ? JSON.parse(userStr) : null
+  } catch {
     return null
   }
 }
 
 export function isAuthenticated(): boolean {
   return getCurrentUser() !== null
-}
-
-export function isAdmin(): boolean {
-  const user = getCurrentUser()
-  return user?.role === "admin"
 }
