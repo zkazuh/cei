@@ -1,62 +1,49 @@
--- Insert sample teacher employees
-INSERT INTO employees (name, position, department, category, hire_date, status) VALUES
-('Maria Santos', 'Mathematics Teacher', 'Education', 'teacher', '2023-01-15', 'active'),
-('João Silva', 'Portuguese Teacher', 'Education', 'teacher', '2022-08-20', 'active'),
-('Ana Costa', 'Science Teacher', 'Education', 'teacher', '2023-03-10', 'active'),
-('Pedro Oliveira', 'History Teacher', 'Education', 'teacher', '2022-11-05', 'active'),
-('Carla Ferreira', 'English Teacher', 'Education', 'teacher', '2023-02-28', 'active'),
-('Miguel Rodrigues', 'Physical Education Teacher', 'Education', 'teacher', '2022-09-12', 'active'),
-('Sofia Almeida', 'Art Teacher', 'Education', 'teacher', '2023-04-18', 'active'),
-('Ricardo Pereira', 'Music Teacher', 'Education', 'teacher', '2022-10-30', 'active')
-ON CONFLICT (name) DO NOTHING;
+-- Add some teachers for demo
+INSERT INTO users (id, email, password_hash, name, role) VALUES
+('550e8400-e29b-41d4-a716-446655440009', 'teacher1@ceiromao.com', '$2b$10$rQZ8qNbJ1K1K2K3K4K5K6K7K8K9KaKbKcKdKeKfKgKhKiKjKkKlKm', 'Prof. Maria Santos', 'employee'),
+('550e8400-e29b-41d4-a716-446655440010', 'teacher2@ceiromao.com', '$2b$10$rQZ8qNbJ1K1K2K3K4K5K6K7K8K9KaKbKcKdKeKfKgKhKiKjKkKlKm', 'Prof. João Silva', 'employee'),
+('550e8400-e29b-41d4-a716-446655440011', 'teacher3@ceiromao.com', '$2b$10$rQZ8qNbJ1K1K2K3K4K5K6K7K8K9KaKbKcKdKeKfKgKhKiKjKkKlKm', 'Prof. Ana Costa', 'employee')
+ON CONFLICT (email) DO NOTHING;
 
--- Create monthly file requirements for current month for all teachers
+-- Insert teacher employees
+INSERT INTO employees (id, user_id, employee_number, department, position, hire_date, category) VALUES
+('660e8400-e29b-41d4-a716-446655440009', '550e8400-e29b-41d4-a716-446655440009', 'TCH001', 'Education', 'Mathematics Teacher', '2023-01-15', 'teacher'),
+('660e8400-e29b-41d4-a716-446655440010', '550e8400-e29b-41d4-a716-446655440010', 'TCH002', 'Education', 'Science Teacher', '2023-02-01', 'teacher'),
+('660e8400-e29b-41d4-a716-446655440011', '550e8400-e29b-41d4-a716-446655440011', 'TCH003', 'Education', 'Language Teacher', '2023-03-01', 'teacher')
+ON CONFLICT (employee_number) DO NOTHING;
+
+-- Create monthly file requirements for current year
 DO $$
 DECLARE
-    teacher_record RECORD;
+    teacher_id UUID;
     current_year INTEGER := EXTRACT(YEAR FROM CURRENT_DATE);
-    current_month INTEGER := EXTRACT(MONTH FROM CURRENT_DATE);
-    due_date DATE := DATE(current_year || '-' || current_month || '-10');
+    month_num INTEGER;
 BEGIN
-    FOR teacher_record IN 
-        SELECT id FROM employees WHERE category = 'teacher' AND status = 'active'
+    -- For each teacher
+    FOR teacher_id IN 
+        SELECT id FROM employees WHERE category = 'teacher' AND is_active = true
     LOOP
-        INSERT INTO monthly_file_requirements (employee_id, year, month, due_date, status)
-        VALUES (teacher_record.id, current_year, current_month, due_date, 'pending')
-        ON CONFLICT (employee_id, year, month) DO NOTHING;
+        -- Create requirements for each month of current year
+        FOR month_num IN 1..12 LOOP
+            INSERT INTO monthly_file_requirements (employee_id, year, month, due_date, status)
+            VALUES (
+                teacher_id,
+                current_year,
+                month_num,
+                DATE(current_year || '-' || LPAD(month_num::text, 2, '0') || '-10'),
+                CASE 
+                    WHEN DATE(current_year || '-' || LPAD(month_num::text, 2, '0') || '-10') < CURRENT_DATE THEN 'overdue'
+                    ELSE 'pending'
+                END
+            )
+            ON CONFLICT (employee_id, year, month) DO NOTHING;
+        END LOOP;
     END LOOP;
 END $$;
 
--- Create some sample file requirements for previous months
-DO $$
-DECLARE
-    teacher_record RECORD;
-    prev_year INTEGER := EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month');
-    prev_month INTEGER := EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month');
-    prev_due_date DATE := DATE(prev_year || '-' || prev_month || '-10');
-BEGIN
-    FOR teacher_record IN 
-        SELECT id FROM employees WHERE category = 'teacher' AND status = 'active' LIMIT 4
-    LOOP
-        INSERT INTO monthly_file_requirements (employee_id, year, month, due_date, status, submitted_at)
-        VALUES (teacher_record.id, prev_year, prev_month, prev_due_date, 'submitted', CURRENT_TIMESTAMP - INTERVAL '5 days')
-        ON CONFLICT (employee_id, year, month) DO NOTHING;
-    END LOOP;
-END $$;
-
--- Create some overdue requirements for demonstration
-DO $$
-DECLARE
-    teacher_record RECORD;
-    overdue_year INTEGER := EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '2 months');
-    overdue_month INTEGER := EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '2 months');
-    overdue_due_date DATE := DATE(overdue_year || '-' || overdue_month || '-10');
-BEGIN
-    FOR teacher_record IN 
-        SELECT id FROM employees WHERE category = 'teacher' AND status = 'active' LIMIT 2
-    LOOP
-        INSERT INTO monthly_file_requirements (employee_id, year, month, due_date, status)
-        VALUES (teacher_record.id, overdue_year, overdue_month, overdue_due_date, 'overdue')
-        ON CONFLICT (employee_id, year, month) DO NOTHING;
-    END LOOP;
-END $$;
+-- Submit some files for demo (mark some as submitted)
+UPDATE monthly_file_requirements 
+SET status = 'submitted' 
+WHERE employee_id IN (
+    SELECT id FROM employees WHERE employee_number IN ('TCH001', 'TCH002')
+) AND month IN (1, 2, 3);

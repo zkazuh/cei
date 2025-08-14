@@ -1,206 +1,195 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { useAuth } from "@/components/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
-import { getEmployeeStats } from "@/lib/employee-management"
-import { getFileStats } from "@/lib/teacher-files"
-import { Users, UserCheck, UserX, Building, FileText, Clock, CheckCircle, AlertCircle } from "lucide-react"
+import { Users, Clock, FileText, TrendingUp } from "lucide-react"
+import Link from "next/link"
+import { getAttendanceStats } from "@/lib/attendance"
+import { getActivityFileStats } from "@/lib/activity-files"
+
+interface Stats {
+  totalEmployees: number
+  presentToday: number
+  pendingFiles: number
+  approvedFiles: number
+  attendanceRate: number
+}
+
+const quickActions = [
+  {
+    name: "Mark Attendance",
+    description: "Update employee attendance for today",
+    href: "/ceiromao/attendance",
+    icon: Users,
+    color: "bg-blue-500",
+  },
+  {
+    name: "Activity Hours",
+    description: "Submit or review activity hour files",
+    href: "/ceiromao/activity-hours",
+    icon: Clock,
+    color: "bg-green-500",
+  },
+]
 
 export default function DashboardPage() {
-  const [employeeStats, setEmployeeStats] = useState({
-    total: 0,
-    active: 0,
-    inactive: 0,
-    byDepartment: {} as Record<string, number>,
-    byCategory: {} as Record<string, number>,
-    recentHires: [] as any[],
-  })
-  const [fileStats, setFileStats] = useState({
-    total: 0,
-    pending: 0,
-    submitted: 0,
-    overdue: 0,
+  const { user } = useAuth()
+  const [stats, setStats] = useState<Stats>({
+    totalEmployees: 0,
+    presentToday: 0,
+    pendingFiles: 0,
+    approvedFiles: 0,
+    attendanceRate: 0,
   })
   const [isLoading, setIsLoading] = useState(true)
-  const { toast } = useToast()
 
   useEffect(() => {
-    loadDashboardData()
+    async function fetchStats() {
+      try {
+        const [attendanceStats, fileStats] = await Promise.all([getAttendanceStats(), getActivityFileStats()])
+
+        setStats({
+          totalEmployees: attendanceStats.totalEmployees,
+          presentToday: attendanceStats.presentToday,
+          pendingFiles: fileStats.pendingFiles,
+          approvedFiles: fileStats.approvedFiles,
+          attendanceRate: attendanceStats.attendanceRate,
+        })
+      } catch (error) {
+        console.error("Error fetching stats:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchStats()
   }, [])
 
-  const loadDashboardData = async () => {
-    setIsLoading(true)
-    try {
-      const [empStats, teacherFileStats] = await Promise.all([getEmployeeStats(), getFileStats()])
-      setEmployeeStats(empStats)
-      setFileStats(teacherFileStats)
-    } catch (error) {
-      console.error("Error loading dashboard data:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load dashboard data",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const statsCards = [
+    {
+      name: "Total Employees",
+      value: stats.totalEmployees.toString(),
+      icon: Users,
+      change: "Active employees",
+      changeType: "neutral",
+    },
+    {
+      name: "Present Today",
+      value: stats.presentToday.toString(),
+      icon: TrendingUp,
+      change: `${stats.attendanceRate}% attendance`,
+      changeType: "positive",
+    },
+    {
+      name: "Files Pending",
+      value: stats.pendingFiles.toString(),
+      icon: Clock,
+      change: "Awaiting review",
+      changeType: "neutral",
+    },
+    {
+      name: "Files Approved",
+      value: stats.approvedFiles.toString(),
+      icon: FileText,
+      change: "This month",
+      changeType: "positive",
+    },
+  ]
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of HR metrics and activities</p>
+        <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name}</h1>
+        <p className="mt-2 text-gray-600">Here's what's happening with your HR operations today.</p>
       </div>
 
-      {/* Employee Stats */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Employee Overview</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{employeeStats.total}</div>
-              <p className="text-xs text-muted-foreground">All employees</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active</CardTitle>
-              <UserCheck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{employeeStats.active}</div>
-              <p className="text-xs text-muted-foreground">Currently active</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Inactive</CardTitle>
-              <UserX className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{employeeStats.inactive}</div>
-              <p className="text-xs text-muted-foreground">Not active</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Departments</CardTitle>
-              <Building className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{Object.keys(employeeStats.byDepartment).length}</div>
-              <p className="text-xs text-muted-foreground">Active departments</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Teacher Files Stats */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Teacher Files Overview</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Requirements</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{fileStats.total}</div>
-              <p className="text-xs text-muted-foreground">All file requirements</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Submitted</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{fileStats.submitted}</div>
-              <p className="text-xs text-muted-foreground">Files submitted</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{fileStats.pending}</div>
-              <p className="text-xs text-muted-foreground">Awaiting submission</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-              <AlertCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{fileStats.overdue}</div>
-              <p className="text-xs text-muted-foreground">Past due date</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Department Breakdown */}
-      {Object.keys(employeeStats.byDepartment).length > 0 && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Department Breakdown</h2>
-          <Card>
-            <CardHeader>
-              <CardTitle>Employees by Department</CardTitle>
-              <CardDescription>Distribution of employees across departments</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {Object.entries(employeeStats.byDepartment).map(([department, count]) => (
-                  <div key={department} className="flex justify-between items-center">
-                    <span className="text-sm font-medium">{department}</span>
-                    <span className="text-sm text-muted-foreground">{count} employees</span>
-                  </div>
-                ))}
+      {/* Stats */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {statsCards.map((stat) => (
+          <Card key={stat.name}>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <stat.icon className="h-8 w-8 text-primary" />
+                </div>
+                <div className="ml-4 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">{stat.name}</dt>
+                    <dd className="text-2xl font-bold text-gray-900">{stat.value}</dd>
+                    <dd className="text-sm text-gray-600">{stat.change}</dd>
+                  </dl>
+                </div>
               </div>
             </CardContent>
           </Card>
-        </div>
-      )}
+        ))}
+      </div>
 
-      {/* Category Breakdown */}
-      {Object.keys(employeeStats.byCategory).length > 0 && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Employee Categories</h2>
-          <Card>
-            <CardHeader>
-              <CardTitle>Employees by Category</CardTitle>
-              <CardDescription>Distribution of employees by employment type</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {Object.entries(employeeStats.byCategory).map(([category, count]) => (
-                  <div key={category} className="flex justify-between items-center">
-                    <span className="text-sm font-medium capitalize">{category}</span>
-                    <span className="text-sm text-muted-foreground">{count} employees</span>
+      {/* Quick Actions - keep existing code */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          {quickActions.map((action) => (
+            <Link key={action.name} href={action.href}>
+              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                <CardHeader>
+                  <div className="flex items-center">
+                    <div className={`p-2 rounded-lg ${action.color}`}>
+                      <action.icon className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="ml-4">
+                      <CardTitle className="text-lg">{action.name}</CardTitle>
+                      <CardDescription>{action.description}</CardDescription>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </CardHeader>
+              </Card>
+            </Link>
+          ))}
         </div>
-      )}
+      </div>
+
+      {/* Recent Activity */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Activity</CardTitle>
+          <CardDescription>Latest updates from your HR system</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">System connected to Supabase database</p>
+                <p className="text-xs text-gray-500">Just now</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">Real-time data synchronization active</p>
+                <p className="text-xs text-gray-500">1 minute ago</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">Database tables initialized</p>
+                <p className="text-xs text-gray-500">2 minutes ago</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

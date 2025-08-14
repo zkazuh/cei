@@ -1,295 +1,186 @@
 import { supabase } from "./supabase"
-import type { Employee, MonthlyFileRequirement } from "./supabase"
+import type { MonthlyFileRequirement } from "./supabase"
 
-export async function getTeachers(): Promise<Employee[]> {
-  try {
-    const { data, error } = await supabase
-      .from("employees")
-      .select("*")
-      .eq("category", "teacher")
-      .eq("status", "active")
-      .order("name")
-
-    if (error) {
-      console.error("Error fetching teachers:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error in getTeachers:", error)
-    return []
-  }
+export interface TeacherFileSubmission {
+  requirementId: string
+  fileId: string
 }
 
-export async function getMonthlyFileRequirements(filters?: {
-  year?: number
-  month?: number
-  status?: string
-  teacherId?: string
-}): Promise<MonthlyFileRequirement[]> {
+export async function getMonthlyRequirements(year?: number, month?: number): Promise<MonthlyFileRequirement[]> {
   try {
     let query = supabase
       .from("monthly_file_requirements")
       .select(`
         *,
-        employee:employees(*),
-        activity_file:activity_files(*)
+        employees!inner(
+          *,
+          users!inner(*)
+        ),
+        activity_files(*)
       `)
-      .order("due_date", { ascending: false })
+      .order("due_date", { ascending: true })
+      .order("name", { ascending: true, foreignTable: "employees.users" })
 
-    if (filters?.year) {
-      query = query.eq("year", filters.year)
-    }
-    if (filters?.month) {
-      query = query.eq("month", filters.month)
-    }
-    if (filters?.status && filters.status !== "all") {
-      query = query.eq("status", filters.status)
-    }
-    if (filters?.teacherId && filters.teacherId !== "all") {
-      query = query.eq("employee_id", filters.teacherId)
+    if (year && month) {
+      query = query.eq("year", year).eq("month", month)
     }
 
     const { data, error } = await query
 
     if (error) {
-      console.error("Error fetching monthly file requirements:", error)
+      console.error("Error fetching monthly requirements:", error)
       return []
     }
 
     return data || []
   } catch (error) {
-    console.error("Error in getMonthlyFileRequirements:", error)
+    console.error("Error fetching monthly requirements:", error)
     return []
   }
 }
 
-export async function uploadActivityFile(
-  employeeId: string,
-  file: File,
-  year: number,
-  month: number,
-): Promise<boolean> {
+export async function getCurrentMonthRequirements(): Promise<MonthlyFileRequirement[]> {
+  const now = new Date()
+  return getMonthlyRequirements(now.getFullYear(), now.getMonth() + 1)
+}
+
+export async function submitTeacherFile(requirementId: string, fileId: string, submittedBy: string): Promise<boolean> {
   try {
-    // In a real implementation, you would upload to Supabase Storage
-    // For now, we'll simulate the file upload
-    const mockFileData = {
-      employee_id: employeeId,
-      filename: file.name,
-      file_path: `/uploads/${employeeId}/${year}/${month}/${file.name}`,
-      file_size: file.size,
-      mime_type: file.type,
-    }
-
-    const { data: activityFile, error: fileError } = await supabase
-      .from("activity_files")
-      .insert(mockFileData)
-      .select()
-      .single()
-
-    if (fileError) {
-      console.error("Error creating activity file:", fileError)
-      return false
-    }
-
-    // Update the monthly requirement
-    const { error: updateError } = await supabase
+    const { error } = await supabase
       .from("monthly_file_requirements")
       .update({
         status: "submitted",
-        submitted_at: new Date().toISOString(),
-        activity_file_id: activityFile.id,
+        submitted_file_id: fileId,
       })
-      .eq("employee_id", employeeId)
-      .eq("year", year)
-      .eq("month", month)
+      .eq("id", requirementId)
 
-    if (updateError) {
-      console.error("Error updating monthly requirement:", updateError)
+    if (error) {
+      console.error("Error submitting teacher file:", error)
       return false
     }
 
+    // Log the activity
+    await supabase.from("activity_logs").insert({
+      user_id: submittedBy,
+      action: "SUBMIT_TEACHER_FILE",
+      table_name: "monthly_file_requirements",
+      record_id: requirementId,
+      new_values: { fileId, status: "submitted" },
+    })
+
     return true
   } catch (error) {
-    console.error("Error in uploadActivityFile:", error)
+    console.error("Error submitting teacher file:", error)
     return false
   }
 }
 
-export async function downloadActivityFile(fileId: string): Promise<Blob | null> {
+export async function updateOverdueRequirements(): Promise<void> {
   try {
-    // In a real implementation, you would download from Supabase Storage
-    // For now, we'll generate a mock PDF file
-    const mockPdfContent = `%PDF-1.4
-1 0 obj
-<<
-/Type /Catalog
-/Pages 2 0 R
->>
-endobj
+    const today = new Date().toISOString().split("T")[0]
 
-2 0 obj
-<<
-/Type /Pages
-/Kids [3 0 R]
-/Count 1
->>
-endobj
-
-3 0 obj
-<<
-/Type /Page
-/Parent 2 0 R
-/MediaBox [0 0 612 792]
-/Contents 4 0 R
->>
-endobj
-
-4 0 obj
-<<
-/Length 44
->>
-stream
-BT
-/F1 12 Tf
-72 720 Td
-(Monthly Activity Report) Tj
-ET
-endstream
-endobj
-
-xref
-0 5
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-0000000206 00000 n 
-trailer
-<<
-/Size 5
-/Root 1 0 R
->>
-startxref
-300
-%%EOF`
-
-    return new Blob([mockPdfContent], { type: "application/pdf" })
+    await supabase
+      .from("monthly_file_requirements")
+      .update({ status: "overdue" })
+      .eq("status", "pending")
+      .lt("due_date", today)
   } catch (error) {
-    console.error("Error in downloadActivityFile:", error)
-    return null
+    console.error("Error updating overdue requirements:", error)
   }
 }
 
-export async function getFileStats(): Promise<{
-  total: number
-  pending: number
-  submitted: number
-  overdue: number
+export async function getTeacherFileStats(): Promise<{
+  totalRequirements: number
+  pendingRequirements: number
+  submittedRequirements: number
+  overdueRequirements: number
+  currentMonthPending: number
+  currentMonthOverdue: number
 }> {
   try {
-    const { data, error } = await supabase.from("monthly_file_requirements").select("status")
+    const { data: requirements } = await supabase
+      .from("monthly_file_requirements")
+      .select("status, year, month, due_date")
 
-    if (error) {
-      console.error("Error fetching file stats:", error)
-      return { total: 0, pending: 0, submitted: 0, overdue: 0 }
+    if (!requirements) {
+      return {
+        totalRequirements: 0,
+        pendingRequirements: 0,
+        submittedRequirements: 0,
+        overdueRequirements: 0,
+        currentMonthPending: 0,
+        currentMonthOverdue: 0,
+      }
     }
 
-    const stats = {
-      total: data?.length || 0,
-      pending: 0,
-      submitted: 0,
-      overdue: 0,
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() + 1
+
+    const totalRequirements = requirements.length
+    const pendingRequirements = requirements.filter((r) => r.status === "pending").length
+    const submittedRequirements = requirements.filter((r) => r.status === "submitted").length
+    const overdueRequirements = requirements.filter((r) => r.status === "overdue").length
+
+    const currentMonthReqs = requirements.filter((r) => r.year === currentYear && r.month === currentMonth)
+    const currentMonthPending = currentMonthReqs.filter((r) => r.status === "pending").length
+    const currentMonthOverdue = currentMonthReqs.filter((r) => r.status === "overdue").length
+
+    return {
+      totalRequirements,
+      pendingRequirements,
+      submittedRequirements,
+      overdueRequirements,
+      currentMonthPending,
+      currentMonthOverdue,
     }
-
-    data?.forEach((req) => {
-      stats[req.status as keyof typeof stats]++
-    })
-
-    return stats
   } catch (error) {
-    console.error("Error in getFileStats:", error)
-    return { total: 0, pending: 0, submitted: 0, overdue: 0 }
+    console.error("Error fetching teacher file stats:", error)
+    return {
+      totalRequirements: 0,
+      pendingRequirements: 0,
+      submittedRequirements: 0,
+      overdueRequirements: 0,
+      currentMonthPending: 0,
+      currentMonthOverdue: 0,
+    }
   }
 }
 
-export async function createMonthlyRequirements(year: number, month: number): Promise<number> {
+export async function createMonthlyRequirementsForAllTeachers(year: number, month: number): Promise<boolean> {
   try {
     // Get all active teachers
     const { data: teachers, error: teachersError } = await supabase
       .from("employees")
       .select("id")
       .eq("category", "teacher")
-      .eq("status", "active")
+      .eq("is_active", true)
 
-    if (teachersError) {
+    if (teachersError || !teachers) {
       console.error("Error fetching teachers:", teachersError)
-      return 0
-    }
-
-    if (!teachers || teachers.length === 0) {
-      return 0
-    }
-
-    // Check if requirements already exist for this month/year
-    const { data: existing, error: existingError } = await supabase
-      .from("monthly_file_requirements")
-      .select("id")
-      .eq("year", year)
-      .eq("month", month)
-
-    if (existingError) {
-      console.error("Error checking existing requirements:", existingError)
-      return 0
-    }
-
-    if (existing && existing.length > 0) {
-      return 0 // Requirements already exist
+      return false
     }
 
     // Create requirements for each teacher
+    const dueDate = new Date(year, month - 1, 10).toISOString().split("T")[0]
     const requirements = teachers.map((teacher) => ({
       employee_id: teacher.id,
       year,
       month,
-      due_date: new Date(year, month - 1, 15).toISOString().split("T")[0], // 15th of the month
+      due_date: dueDate,
       status: "pending" as const,
     }))
 
-    const { data, error } = await supabase.from("monthly_file_requirements").insert(requirements).select()
+    const { error: insertError } = await supabase.from("monthly_file_requirements").insert(requirements)
 
-    if (error) {
-      console.error("Error creating monthly requirements:", error)
-      return 0
+    if (insertError) {
+      console.error("Error creating monthly requirements:", insertError)
+      return false
     }
 
-    return data?.length || 0
+    return true
   } catch (error) {
-    console.error("Error in createMonthlyRequirements:", error)
-    return 0
-  }
-}
-
-export async function updateOverdueRequirements(): Promise<number> {
-  try {
-    const today = new Date().toISOString().split("T")[0]
-
-    const { data, error } = await supabase
-      .from("monthly_file_requirements")
-      .update({ status: "overdue" })
-      .eq("status", "pending")
-      .lt("due_date", today)
-      .select()
-
-    if (error) {
-      console.error("Error updating overdue requirements:", error)
-      return 0
-    }
-
-    return data?.length || 0
-  } catch (error) {
-    console.error("Error in updateOverdueRequirements:", error)
-    return 0
+    console.error("Error creating monthly requirements:", error)
+    return false
   }
 }
