@@ -5,19 +5,7 @@ import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Textarea } from "@/components/ui/textarea"
 import { Calendar, Users, Clock, CheckCircle } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -26,7 +14,7 @@ import {
   addAttendanceJustification,
   getAttendanceStatsForDate,
 } from "@/lib/attendance"
-import { getEmployees } from "@/lib/employees"
+import { getEmployees } from "@/lib/employee-management"
 import type { Attendance, Employee } from "@/lib/supabase"
 import { format } from "date-fns"
 
@@ -155,7 +143,7 @@ export default function AttendancePage() {
 
         toast({
           title: "Attendance Updated",
-          description: `${employee.users?.name} marked as ${status} for ${period} on ${format(selectedDate, "PPP")}.`,
+          description: `${employee.name} marked as ${status} for ${period} on ${format(selectedDate, "PPP")}.`,
         })
       } else {
         toast({
@@ -370,8 +358,8 @@ export default function AttendancePage() {
               return (
                 <div key={employee.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900">{employee.users?.name}</h3>
-                    <p className="text-sm text-gray-500">{employee.users?.email}</p>
+                    <h3 className="font-medium text-gray-900">{employee.name}</h3>
+                    <p className="text-sm text-gray-500">{employee.employee_number}</p>
                     <p className="text-xs text-gray-400">
                       {employee.department} • {employee.position}
                     </p>
@@ -420,32 +408,6 @@ export default function AttendancePage() {
                                 </Button>
                               </div>
                             )
-                          )}
-
-                          {morning?.status === "absent" && (
-                            <Dialog
-                              open={isDialogOpen && selectedAttendance?.id === morning.id}
-                              onOpenChange={setIsDialogOpen}
-                            >
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-xs px-2 py-1 h-6 bg-transparent"
-                                  onClick={() => openJustificationDialog(morning)}
-                                  disabled={user?.role !== "admin"}
-                                >
-                                  <Users className="h-3 w-3 mr-1" />
-                                  {morning.attendance_justifications?.[0] ? "Edit" : "Add"}
-                                </Button>
-                              </DialogTrigger>
-                            </Dialog>
-                          )}
-
-                          {morning?.attendance_justifications?.[0] && (
-                            <Badge variant="outline" className="text-xs">
-                              {morning.attendance_justifications[0].justification_type.replace("_", " ")}
-                            </Badge>
                           )}
 
                           {!morning && user?.role !== "admin" && (
@@ -501,32 +463,6 @@ export default function AttendancePage() {
                             )
                           )}
 
-                          {afternoon?.status === "absent" && (
-                            <Dialog
-                              open={isDialogOpen && selectedAttendance?.id === afternoon.id}
-                              onOpenChange={setIsDialogOpen}
-                            >
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-xs px-2 py-1 h-6 bg-transparent"
-                                  onClick={() => openJustificationDialog(afternoon)}
-                                  disabled={user?.role !== "admin"}
-                                >
-                                  <Users className="h-3 w-3 mr-1" />
-                                  {afternoon.attendance_justifications?.[0] ? "Edit" : "Add"}
-                                </Button>
-                              </DialogTrigger>
-                            </Dialog>
-                          )}
-
-                          {afternoon?.attendance_justifications?.[0] && (
-                            <Badge variant="outline" className="text-xs">
-                              {afternoon.attendance_justifications[0].justification_type.replace("_", " ")}
-                            </Badge>
-                          )}
-
                           {!afternoon && user?.role !== "admin" && (
                             <Badge variant="outline" className="text-xs">
                               Not Marked
@@ -542,59 +478,6 @@ export default function AttendancePage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Justification Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Absence Justification</DialogTitle>
-            <DialogDescription>
-              Add or update justification for {selectedAttendance?.employees?.users?.name}'s absence on{" "}
-              {format(selectedDate, "PPP")} ({selectedAttendance?.period})
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="type">Justification Type</Label>
-              <Select value={justificationType} onValueChange={setJustificationType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select justification type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="medical">Medical Leave</SelectItem>
-                  <SelectItem value="justified">Justified Absence</SelectItem>
-                  <SelectItem value="course">Course</SelectItem>
-                  <SelectItem value="recess">Recess</SelectItem>
-                  <SelectItem value="meeting">Meeting</SelectItem>
-                  <SelectItem value="banked_hours">Banked Hours</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="justification">Justification Details</Label>
-              <Textarea
-                id="justification"
-                placeholder="Enter justification details..."
-                value={justification}
-                onChange={(e) => setJustification(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleJustificationSubmit} disabled={!justification.trim() || !justificationType}>
-              Save Justification
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

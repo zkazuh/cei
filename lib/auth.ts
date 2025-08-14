@@ -1,28 +1,27 @@
-"use client"
+import { supabase } from "./supabase"
+import type { User } from "./supabase"
 
-export interface User {
-  id: string
-  email: string
-  role: string
-}
+export async function signIn(email: string, password: string): Promise<User | null> {
+  try {
+    // For demo purposes, we'll simulate authentication
+    // In a real app, you'd use Supabase auth
+    const { data: user, error } = await supabase.from("users").select("*").eq("email", email).single()
 
-export function login(email: string, password: string): User | null {
-  // Simple demo authentication
-  const validUsers = [
-    { id: "1", email: "admin@ceiromao.com", role: "admin" },
-    { id: "2", email: "hr@ceiromao.com", role: "hr" },
-    { id: "3", email: "teacher@ceiromao.com", role: "teacher" },
-  ]
+    if (error || !user) {
+      console.error("Login error:", error)
+      return null
+    }
 
-  const user = validUsers.find((u) => u.email === email)
-  if (user) {
+    // Store user in localStorage for demo
     localStorage.setItem("user", JSON.stringify(user))
     return user
+  } catch (error) {
+    console.error("Sign in error:", error)
+    return null
   }
-  return null
 }
 
-export function logout(): void {
+export async function signOut(): Promise<void> {
   localStorage.removeItem("user")
 }
 
@@ -39,6 +38,18 @@ export function getCurrentUser(): User | null {
   }
 }
 
-export function isAuthenticated(): boolean {
-  return getCurrentUser() !== null
+export async function getUsers(): Promise<User[]> {
+  try {
+    const { data, error } = await supabase.from("users").select("*").order("name")
+
+    if (error) {
+      console.error("Error fetching users:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getUsers:", error)
+    return []
+  }
 }

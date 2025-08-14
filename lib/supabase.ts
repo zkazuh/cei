@@ -5,9 +5,11 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// Types
 export interface User {
   id: string
   email: string
+  name: string
   role: string
   created_at: string
   updated_at: string
@@ -15,24 +17,37 @@ export interface User {
 
 export interface Employee {
   id: string
-  name: string
+  user_id?: string
   employee_number: string
-  department: string
+  name: string
   position: string
+  department: string
   hire_date: string
   status: string
   category: string
   created_at: string
   updated_at: string
+  users?: User
 }
 
 export interface Attendance {
   id: string
   employee_id: string
   date: string
-  status: string
-  hours_worked: number
-  notes?: string
+  period: "morning" | "afternoon"
+  status: "present" | "absent" | "late"
+  marked_by: string
+  created_at: string
+  updated_at: string
+  attendance_justifications?: AttendanceJustification[]
+}
+
+export interface AttendanceJustification {
+  id: string
+  attendance_id: string
+  justification_type: string
+  justification_text: string
+  created_by: string
   created_at: string
   updated_at: string
 }
@@ -40,34 +55,20 @@ export interface Attendance {
 export interface ActivityFile {
   id: string
   employee_id: string
-  filename: string
-  file_path: string
-  file_size: number
-  mime_type: string
-  upload_date: string
-  created_at: string
-  updated_at: string
-}
-
-export interface MonthlyFileRequirement {
-  id: string
-  employee_id: string
-  year: number
-  month: number
-  due_date: string
+  file_name: string
+  file_type: string
+  requirement_type: string
+  due_date?: string
   status: string
   submitted_at?: string
-  activity_file_id?: string
   created_at: string
   updated_at: string
 }
 
 export interface ActivityLog {
   id: string
-  user_id?: string
+  user_id: string
   action: string
-  entity_type: string
-  entity_id?: string
-  details?: any
+  details?: string
   created_at: string
 }

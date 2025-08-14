@@ -5,7 +5,7 @@ import { useAuth } from "@/components/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { FileText, Loader2, BarChart3, TrendingUp } from "lucide-react"
+import { FileText, Loader2, BarChart3, TrendingUp, Calendar, Users, Download } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
   getMonthlyAttendanceReport,
@@ -235,176 +235,179 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
-        <p className="text-gray-600">Generate and view various HR reports</p>
+        <p className="text-gray-600">Generate and view various HR reports and analytics</p>
       </div>
 
+      {/* Report Categories */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-500" />
+              Employee Reports
+            </CardTitle>
+            <CardDescription>Generate reports about employee data, demographics, and statistics</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Button variant="outline" className="w-full justify-start bg-transparent">
+                <FileText className="h-4 w-4 mr-2" />
+                Employee Directory
+              </Button>
+              <Button variant="outline" className="w-full justify-start bg-transparent">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Department Analysis
+              </Button>
+              <Button variant="outline" className="w-full justify-start bg-transparent">
+                <Calendar className="h-4 w-4 mr-2" />
+                Hiring Trends
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-green-500" />
+              Attendance Reports
+            </CardTitle>
+            <CardDescription>Track attendance patterns, absences, and working hours</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Button variant="outline" className="w-full justify-start bg-transparent">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Daily Attendance
+              </Button>
+              <Button variant="outline" className="w-full justify-start bg-transparent">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Monthly Summary
+              </Button>
+              <Button variant="outline" className="w-full justify-start bg-transparent">
+                <FileText className="h-4 w-4 mr-2" />
+                Absence Analysis
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-purple-500" />
+              File Reports
+            </CardTitle>
+            <CardDescription>Monitor file submissions, requirements, and compliance</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Button variant="outline" className="w-full justify-start bg-transparent">
+                <FileText className="h-4 w-4 mr-2" />
+                Submission Status
+              </Button>
+              <Button variant="outline" className="w-full justify-start bg-transparent">
+                <Calendar className="h-4 w-4 mr-2" />
+                Overdue Files
+              </Button>
+              <Button variant="outline" className="w-full justify-start bg-transparent">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Compliance Rates
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Reports */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Report Generation
-          </CardTitle>
-          <CardDescription>
-            This feature is coming soon. You'll be able to generate comprehensive reports on employees, attendance, and
-            file submissions.
-          </CardDescription>
+          <CardTitle>Quick Reports</CardTitle>
+          <CardDescription>Generate commonly requested reports with one click</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-6 border rounded-lg">
-              <FileText className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-              <h3 className="font-medium">Employee Reports</h3>
-              <p className="text-sm text-gray-600">Detailed employee information and statistics</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Button className="h-16 flex-col" onClick={() => exportToCSV()}>
+              <Download className="h-6 w-6 mb-2" />
+              Export All Employees
+            </Button>
+            <Button className="h-16 flex-col bg-transparent" variant="outline">
+              <Calendar className="h-6 w-6 mb-2" />
+              This Month's Attendance
+            </Button>
+            <Button className="h-16 flex-col bg-transparent" variant="outline">
+              <FileText className="h-6 w-6 mb-2" />
+              Pending File Requirements
+            </Button>
+            <Button className="h-16 flex-col bg-transparent" variant="outline">
+              <BarChart3 className="h-6 w-6 mb-2" />
+              Department Summary
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Coming Soon */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Advanced Analytics</CardTitle>
+          <CardDescription>More detailed reporting features are coming soon</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 mb-4">
+              Advanced reporting features including custom date ranges, detailed analytics, and automated report
+              scheduling will be available soon.
+            </p>
+            <Button variant="outline">Request Feature</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Report Center */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Report Center</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center space-x-4">
+            {/* Year Selection */}
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium">Year:</label>
+              {/* Placeholder for Select component */}
+              <div className="w-24 bg-gray-100 rounded-lg px-3 py-2">Select Year</div>
             </div>
-            <div className="text-center p-6 border rounded-lg">
-              <BarChart3 className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-              <h3 className="font-medium">Attendance Reports</h3>
-              <p className="text-sm text-gray-600">Attendance patterns and summaries</p>
+
+            {/* Period Navigation */}
+            <div className="flex items-center space-x-2">
+              <Button variant="outline" size="sm" onClick={() => navigatePeriod("prev")}>
+                {/* Placeholder for ChevronLeft component */}
+                <div className="h-4 w-4 mb-2 bg-gray-100 rounded-lg">Prev</div>
+              </Button>
+
+              <div className="min-w-[200px] text-center">
+                <span className="font-medium">{reportPeriod.label}</span>
+              </div>
+
+              <Button variant="outline" size="sm" onClick={() => navigatePeriod("next")}>
+                {/* Placeholder for ChevronRight component */}
+                <div className="h-4 w-4 mb-2 bg-gray-100 rounded-lg">Next</div>
+              </Button>
             </div>
-            <div className="text-center p-6 border rounded-lg">
-              <TrendingUp className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-              <h3 className="font-medium">File Submission Reports</h3>
-              <p className="text-sm text-gray-600">Teacher file submission analytics</p>
+
+            {/* Period Selection Dropdown */}
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium">Period:</label>
+              {/* Placeholder for Select component */}
+              <div className="w-40 bg-gray-100 rounded-lg px-3 py-2">Select Period</div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Report Categories */}
-      {/* <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Employee Reports
-            </CardTitle>
-            <CardDescription>Comprehensive employee data and statistics</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full bg-transparent">
-              <Download className="h-4 w-4 mr-2" />
-              Generate Report
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Attendance Reports
-            </CardTitle>
-            <CardDescription>Attendance trends and patterns analysis</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full bg-transparent">
-              <Download className="h-4 w-4 mr-2" />
-              Generate Report
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Teacher Files Reports
-            </CardTitle>
-            <CardDescription>File submission status and compliance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full bg-transparent">
-              <Download className="h-4 w-4 mr-2" />
-              Generate Report
-            </Button>
-          </CardContent>
-        </Card>
-      </div> */}
-
-      {/* Report Center */}
-      {/* <Card>
-        <CardHeader>
-          <CardTitle>Report Center</CardTitle>
-          <CardDescription>Advanced reporting features will be implemented here</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">
-            <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">Advanced reporting features coming soon...</p>
-          </div>
-        </CardContent>
-      </Card> */}
-
-      {/* Period Navigation */}
-      {/* <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Report Period Selection</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-4">
-            {/* Year Selection */}
-      {/* <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium">Year:</label>
-              <Select
-                value={selectedYear.toString()}
-                onValueChange={(value) => setSelectedYear(Number.parseInt(value))}
-              >
-                <SelectTrigger className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableYears.map((year) => (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Period Navigation */}
-      {/* <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm" onClick={() => navigatePeriod("prev")}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <div className="min-w-[200px] text-center">
-                <span className="font-medium">{getReportPeriodTitle(reportPeriod)}</span>
-              </div>
-
-              <Button variant="outline" size="sm" onClick={() => navigatePeriod("next")}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Period Selection Dropdown */}
-      {/* <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium">Period:</label>
-              <Select
-                value={selectedPeriod.monthIndex.toString()}
-                onValueChange={(value) => {
-                  const period = availablePeriods.find((p) => p.monthIndex === Number.parseInt(value))
-                  if (period) setSelectedPeriod(period)
-                }}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availablePeriods.map((period) => (
-                    <SelectItem key={period.monthIndex} value={period.monthIndex.toString()}>
-                      {period.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card> */}
-
       {/* Legend */}
-      {/* <Card>
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg">Legend</CardTitle>
         </CardHeader>
@@ -461,10 +464,10 @@ export default function ReportsPage() {
             </p>
           </div>
         </CardContent>
-      </Card> */}
+      </Card>
 
       {/* Report Table */}
-      {/* <Card>
+      <Card>
         <CardHeader>
           <CardTitle>Employee Attendance</CardTitle>
           <CardDescription>
@@ -509,11 +512,13 @@ export default function ReportsPage() {
                             // Show separate morning/afternoon badges when different
                             <div className="flex flex-col space-y-1">
                               <div className="flex items-center justify-center space-x-1">
-                                <Sun className="h-2 w-2 text-yellow-500" />
+                                {/* Placeholder for Sun component */}
+                                <div className="h-2 w-2 text-yellow-500">Sun</div>
                                 {getStatusBadge(dayData?.morning || "F")}
                               </div>
                               <div className="flex items-center justify-center space-x-1">
-                                <Moon className="h-2 w-2 text-blue-500" />
+                                {/* Placeholder for Moon component */}
+                                <div className="h-2 w-2 text-blue-500">Moon</div>
                                 {getStatusBadge(dayData?.afternoon || "F")}
                               </div>
                             </div>
@@ -527,10 +532,10 @@ export default function ReportsPage() {
             </table>
           </div>
         </CardContent>
-      </Card> */}
+      </Card>
 
       {/* Summary Statistics */}
-      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center">
@@ -588,7 +593,7 @@ export default function ReportsPage() {
             </div>
           </CardContent>
         </Card>
-      </div> */}
+      </div>
     </div>
   )
 }
