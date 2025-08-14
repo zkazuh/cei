@@ -154,7 +154,7 @@ export async function createMonthlyRequirementsForAllTeachers(year: number, mont
       .from("employees")
       .select("id")
       .eq("category", "teacher")
-      .eq("is_active", true)
+      .eq("status", "active") // Fixed column name from is_active to status
 
     if (teachersError || !teachers) {
       console.error("Error fetching teachers:", teachersError)
