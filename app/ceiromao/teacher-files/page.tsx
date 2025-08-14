@@ -8,80 +8,94 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/components/auth-provider"
 import {
   getMonthlyFileRequirements,
-  createCurrentMonthRequirements,
-  updateRequirementStatus,
-  markOverdueRequirements,
-  getTeacherFileStats,
+  getTeachers,
+  createMonthlyRequirements,
+  updateOverdueRequirements,
   uploadTeacherFile,
   downloadTeacherFile,
   formatFileSize,
   getFileIcon,
+  type MonthlyFileRequirementWithDetails,
 } from "@/lib/teacher-files"
-import type { MonthlyFileRequirementWithEmployee } from "@/lib/supabase"
+import type { Employee } from "@/lib/supabase"
 import {
   GraduationCap,
-  FileText,
+  Upload,
+  Download,
+  Calendar,
   Clock,
   CheckCircle,
   AlertCircle,
   Plus,
-  Download,
-  Upload,
-  Calendar,
+  RefreshCw,
+  FileText,
+  Users,
+  Loader2,
 } from "lucide-react"
-import { format } from "date-fns"
 
 export default function TeacherFilesPage() {
-  const [requirements, setRequirements] = useState<MonthlyFileRequirementWithEmployee[]>([])
-  const [stats, setStats] = useState({ total: 0, pending: 0, submitted: 0, overdue: 0 })
+  const [requirements, setRequirements] = useState<MonthlyFileRequirementWithDetails[]>([])
+  const [teachers, setTeachers] = useState<Employee[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [filters, setFilters] = useState({
-    year: new Date().getFullYear(),
-    month: new Date().getMonth() + 1,
-    status: "all",
-  })
-  const [uploadingFile, setUploadingFile] = useState<string | null>(null)
-  const [downloadingFile, setDownloadingFile] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState<string | null>(null)
+  const [isDownloading, setIsDownloading] = useState<string | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  // Filters
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
+  const [selectedMonth, setSelectedMonth] = useState<string>("all")
+  const [selectedStatus, setSelectedStatus] = useState<string>("all")
+  const [selectedEmployee, setSelectedEmployee] = useState<string>("all")
+
+  // Create requirements form
+  const [createYear, setCreateYear] = useState<string>(new Date().getFullYear().toString())
+  const [createMonth, setCreateMonth] = useState<string>((new Date().getMonth() + 1).toString())
+
   const { toast } = useToast()
-  const { user } = useAuth()
+
+  const months = [
+    { value: "1", label: "January" },
+    { value: "2", label: "February" },
+    { value: "3", label: "March" },
+    { value: "4", label: "April" },
+    { value: "5", label: "May" },
+    { value: "6", label: "June" },
+    { value: "7", label: "July" },
+    { value: "8", label: "August" },
+    { value: "9", label: "September" },
+    { value: "10", label: "October" },
+    { value: "11", label: "November" },
+    { value: "12", label: "December" },
+  ]
+
+  const years = Array.from({ length: 5 }, (_, i) => {
+    const year = new Date().getFullYear() - 2 + i
+    return { value: year.toString(), label: year.toString() }
+  })
 
   useEffect(() => {
     loadData()
-  }, [filters])
+  }, [selectedYear, selectedMonth, selectedStatus, selectedEmployee])
 
   const loadData = async () => {
     setIsLoading(true)
     try {
-      // Mark overdue requirements first
-      await markOverdueRequirements()
+      const [requirementsData, teachersData] = await Promise.all([
+        getMonthlyFileRequirements(
+          selectedYear !== "all" ? Number.parseInt(selectedYear) : undefined,
+          selectedMonth !== "all" ? Number.parseInt(selectedMonth) : undefined,
+          selectedStatus,
+          selectedEmployee !== "all" ? selectedEmployee : undefined,
+        ),
+        getTeachers(),
+      ])
 
-      // Load requirements with filters
-      const filterParams: any = {
-        year: filters.year,
-        month: filters.month,
-      }
-
-      if (filters.status !== "all") {
-        filterParams.status = filters.status
-      }
-
-      // If user is a teacher, only show their requirements
-      if (user?.role === "teacher") {
-        // In a real app, you'd get the employee_id from the user
-        // For now, we'll show all requirements
-      }
-
-      const data = await getMonthlyFileRequirements(filterParams)
-      setRequirements(data)
-
-      // Load stats for current month
-      const statsData = await getTeacherFileStats()
-      setStats(statsData)
+      setRequirements(requirementsData)
+      setTeachers(teachersData)
     } catch (error) {
-      console.error("Error loading teacher files data:", error)
       toast({
         title: "Error",
         description: "Failed to load teacher files data",
@@ -92,13 +106,14 @@ export default function TeacherFilesPage() {
     }
   }
 
-  const handleCreateCurrentMonth = async () => {
+  const handleCreateRequirements = async () => {
+    setIsCreating(true)
     try {
-      const success = await createCurrentMonthRequirements()
+      const success = await createMonthlyRequirements(Number.parseInt(createYear), Number.parseInt(createMonth))
       if (success) {
         toast({
           title: "Success",
-          description: "Monthly file requirements created for all teachers",
+          description: "Monthly requirements created for all teachers",
         })
         loadData()
       } else {
@@ -111,31 +126,52 @@ export default function TeacherFilesPage() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "An error occurred while creating requirements",
+        description: "Failed to create monthly requirements",
         variant: "destructive",
       })
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleUpdateOverdue = async () => {
+    setIsUpdating(true)
+    try {
+      const success = await updateOverdueRequirements()
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Overdue requirements updated",
+        })
+        loadData()
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to update overdue requirements",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update overdue requirements",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdating(false)
     }
   }
 
   const handleFileUpload = async (requirementId: string, employeeId: string, file: File) => {
-    setUploadingFile(requirementId)
+    setIsUploading(requirementId)
     try {
-      const uploadedFile = await uploadTeacherFile(employeeId, file)
-      if (uploadedFile) {
-        const success = await updateRequirementStatus(requirementId, "submitted", uploadedFile.id)
-        if (success) {
-          toast({
-            title: "Success",
-            description: "File uploaded successfully",
-          })
-          loadData()
-        } else {
-          toast({
-            title: "Error",
-            description: "File uploaded but failed to update requirement status",
-            variant: "destructive",
-          })
-        }
+      const success = await uploadTeacherFile(requirementId, file, employeeId)
+      if (success) {
+        toast({
+          title: "Success",
+          description: "File uploaded successfully",
+        })
+        loadData()
       } else {
         toast({
           title: "Error",
@@ -146,119 +182,78 @@ export default function TeacherFilesPage() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "An error occurred while uploading file",
+        description: "Failed to upload file",
         variant: "destructive",
       })
     } finally {
-      setUploadingFile(null)
+      setIsUploading(null)
     }
   }
 
   const handleFileDownload = async (fileId: string, fileName: string) => {
-    setDownloadingFile(fileId)
+    setIsDownloading(fileId)
     try {
-      const downloadData = await downloadTeacherFile(fileId)
-      if (downloadData) {
-        // Create download link
-        const url = window.URL.createObjectURL(downloadData.blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = downloadData.fileName
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-
-        toast({
-          title: "Success",
-          description: `File "${fileName}" downloaded successfully`,
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to download file",
-          variant: "destructive",
-        })
-      }
+      await downloadTeacherFile(fileId)
+      toast({
+        title: "Success",
+        description: `Downloaded ${fileName}`,
+      })
     } catch (error) {
       toast({
         title: "Error",
-        description: "An error occurred while downloading file",
+        description: "Failed to download file",
         variant: "destructive",
       })
     } finally {
-      setDownloadingFile(null)
+      setIsDownloading(null)
     }
   }
 
-  const getStatusBadge = (status: string, dueDate: string) => {
-    const isOverdue = new Date(dueDate) < new Date() && status === "pending"
-
-    if (isOverdue || status === "overdue") {
-      return (
-        <Badge variant="destructive" className="flex items-center gap-1">
-          <AlertCircle className="h-3 w-3" />
-          Overdue
-        </Badge>
-      )
-    }
-
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "submitted":
         return (
-          <Badge variant="default" className="flex items-center gap-1 bg-green-500 hover:bg-green-600">
-            <CheckCircle className="h-3 w-3" />
+          <Badge className="bg-green-100 text-green-800">
+            <CheckCircle className="w-3 h-3 mr-1" />
             Submitted
           </Badge>
         )
-      case "pending":
+      case "overdue":
         return (
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            Pending
+          <Badge className="bg-red-100 text-red-800">
+            <AlertCircle className="w-3 h-3 mr-1" />
+            Overdue
           </Badge>
         )
       default:
-        return <Badge variant="outline">{status}</Badge>
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800">
+            <Clock className="w-3 h-3 mr-1" />
+            Pending
+          </Badge>
+        )
     }
   }
 
-  const exportToCSV = () => {
-    const csvContent = [
-      ["Employee", "Month", "Year", "Due Date", "Status", "Submitted At", "File Name"].join(","),
-      ...requirements.map((req) =>
-        [
-          req.employee?.name || "Unknown",
-          req.month,
-          req.year,
-          req.due_date,
-          req.status,
-          req.submitted_at || "Not submitted",
-          req.file?.file_name || "No file",
-        ].join(","),
-      ),
-    ].join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `teacher-files-${filters.year}-${filters.month}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
+  const stats = {
+    total: requirements.length,
+    pending: requirements.filter((r) => r.status === "pending").length,
+    submitted: requirements.filter((r) => r.status === "submitted").length,
+    overdue: requirements.filter((r) => r.status === "overdue").length,
   }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
             <GraduationCap className="h-8 w-8 text-purple-600" />
@@ -267,18 +262,14 @@ export default function TeacherFilesPage() {
           <p className="text-muted-foreground">Manage monthly file submissions for teachers</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={exportToCSV} variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
-          </Button>
-          <Button onClick={handleCreateCurrentMonth}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Current Month
+          <Button onClick={handleUpdateOverdue} disabled={isUpdating} variant="outline">
+            {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Update Overdue
           </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -287,43 +278,85 @@ export default function TeacherFilesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">Current month</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{stats.pending}</div>
-            <p className="text-xs text-muted-foreground">Awaiting submission</p>
+            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Submitted</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{stats.submitted}</div>
-            <p className="text-xs text-muted-foreground">Completed on time</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            <AlertCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
-            <p className="text-xs text-muted-foreground">Past due date</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Create Requirements Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+            Create Monthly Requirements
+          </CardTitle>
+          <CardDescription>Create file submission requirements for all teachers for a specific month</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4 items-end">
+            <div className="grid w-full max-w-sm items-center gap-1.5">
+              <Label htmlFor="create-year">Year</Label>
+              <Select value={createYear} onValueChange={setCreateYear}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((year) => (
+                    <SelectItem key={year.value} value={year.value}>
+                      {year.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid w-full max-w-sm items-center gap-1.5">
+              <Label htmlFor="create-month">Month</Label>
+              <Select value={createMonth} onValueChange={setCreateMonth}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((month) => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleCreateRequirements} disabled={isCreating}>
+              {isCreating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+              Create Requirements
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Filters */}
       <Card>
@@ -332,50 +365,41 @@ export default function TeacherFilesPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
-            <div className="space-y-2">
+            <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="year">Year</Label>
-              <Select
-                value={filters.year.toString()}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, year: Number.parseInt(value) }))}
-              >
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[2023, 2024, 2025].map((year) => (
-                    <SelectItem key={year} value={year.toString()}>
-                      {year}
+                  <SelectItem value="all">All Years</SelectItem>
+                  {years.map((year) => (
+                    <SelectItem key={year.value} value={year.value}>
+                      {year.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-2">
+            <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="month">Month</Label>
-              <Select
-                value={filters.month.toString()}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, month: Number.parseInt(value) }))}
-              >
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                    <SelectItem key={month} value={month.toString()}>
-                      {format(new Date(2024, month - 1, 1), "MMMM")}
+                  <SelectItem value="all">All Months</SelectItem>
+                  {months.map((month) => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-2">
+            <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="status">Status</Label>
-              <Select
-                value={filters.status}
-                onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
-              >
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -387,141 +411,153 @@ export default function TeacherFilesPage() {
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="flex items-end">
-              <Button onClick={loadData} className="w-full">
-                Apply Filters
-              </Button>
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="employee">Teacher</Label>
+              <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Teachers</SelectItem>
+                  {teachers.map((teacher) => (
+                    <SelectItem key={teacher.id} value={teacher.id}>
+                      {teacher.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Requirements List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>File Requirements</CardTitle>
-          <CardDescription>Monthly file submission requirements for teachers</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {requirements.length === 0 ? (
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No file requirements found for the selected filters.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {requirements.map((requirement) => (
-                <div key={requirement.id} className="border rounded-lg p-6 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-4 flex-1">
-                      <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-full">
-                        <GraduationCap className="h-6 w-6 text-purple-600" />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-semibold text-lg">{requirement.employee?.name || "Unknown Teacher"}</h3>
-                          {getStatusBadge(requirement.status, requirement.due_date)}
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground mb-3">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <span>{format(new Date(requirement.year, requirement.month - 1, 1), "MMMM yyyy")}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4" />
-                            <span>Due: {format(new Date(requirement.due_date), "MMM dd, yyyy")}</span>
-                          </div>
-                          {requirement.submitted_at && (
-                            <div className="flex items-center gap-2 text-green-600">
-                              <CheckCircle className="h-4 w-4" />
-                              <span>Submitted: {format(new Date(requirement.submitted_at), "MMM dd, yyyy HH:mm")}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* File Information */}
-                        {requirement.file && (
-                          <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-lg">{getFileIcon(requirement.file.file_type)}</span>
-                              <span className="font-medium">{requirement.file.file_name}</span>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              <span>Size: {formatFileSize(requirement.file.file_size)}</span>
-                              <span>Type: {requirement.file.file_type}</span>
-                              <span>Uploaded: {format(new Date(requirement.file.upload_date), "MMM dd, yyyy")}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+      <div className="grid gap-4">
+        {requirements.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Users className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Requirements Found</h3>
+              <p className="text-muted-foreground text-center">
+                No monthly file requirements match your current filters. Try adjusting the filters or create new
+                requirements.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          requirements.map((requirement) => (
+            <Card key={requirement.id}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-100 rounded-full">
+                      <GraduationCap className="h-5 w-5 text-purple-600" />
                     </div>
+                    <div>
+                      <CardTitle className="text-lg">{requirement.employee.name}</CardTitle>
+                      <CardDescription>
+                        {months.find((m) => m.value === requirement.month.toString())?.label} {requirement.year}
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(requirement.status)}
+                    <Badge variant="outline" className="text-purple-600 border-purple-200">
+                      <GraduationCap className="w-3 h-3 mr-1" />
+                      Teacher
+                    </Badge>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      Due: {new Date(requirement.due_date).toLocaleDateString()}
+                    </div>
+                    {requirement.submitted_at && (
+                      <div className="flex items-center gap-1">
+                        <CheckCircle className="h-4 w-4" />
+                        Submitted: {new Date(requirement.submitted_at).toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-col gap-2 ml-4">
-                      {requirement.status === "pending" && (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="file"
-                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file && requirement.employee) {
-                                handleFileUpload(requirement.id, requirement.employee.id, file)
-                              }
-                            }}
-                            disabled={uploadingFile === requirement.id}
-                            className="hidden"
-                            id={`file-upload-${requirement.id}`}
-                          />
-                          <Label htmlFor={`file-upload-${requirement.id}`}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={uploadingFile === requirement.id}
-                              className="cursor-pointer bg-transparent"
-                              asChild
-                            >
-                              <span>
-                                <Upload className="h-4 w-4 mr-2" />
-                                {uploadingFile === requirement.id ? "Uploading..." : "Upload File"}
-                              </span>
-                            </Button>
-                          </Label>
+                  {requirement.status === "pending" ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            handleFileUpload(requirement.id, requirement.employee_id, file)
+                          }
+                        }}
+                        disabled={isUploading === requirement.id}
+                        className="flex-1"
+                      />
+                      <Button
+                        disabled={isUploading === requirement.id}
+                        onClick={() => {
+                          const input = document.createElement("input")
+                          input.type = "file"
+                          input.accept = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0]
+                            if (file) {
+                              handleFileUpload(requirement.id, requirement.employee_id, file)
+                            }
+                          }
+                          input.click()
+                        }}
+                      >
+                        {isUploading === requirement.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : (
+                          <Upload className="h-4 w-4 mr-2" />
+                        )}
+                        Upload File
+                      </Button>
+                    </div>
+                  ) : requirement.activity_file ? (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{getFileIcon(requirement.activity_file.mime_type)}</span>
+                          <div>
+                            <p className="font-medium">{requirement.activity_file.filename}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {formatFileSize(requirement.activity_file.file_size)} • Uploaded{" "}
+                              {new Date(requirement.activity_file.upload_date).toLocaleDateString()}
+                            </p>
+                          </div>
                         </div>
-                      )}
-
-                      {requirement.file && requirement.status === "submitted" && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleFileDownload(requirement.file!.id, requirement.file!.file_name)}
-                          disabled={downloadingFile === requirement.file.id}
-                          className="flex items-center gap-2"
+                          onClick={() =>
+                            handleFileDownload(requirement.activity_file!.id, requirement.activity_file!.filename)
+                          }
+                          disabled={isDownloading === requirement.activity_file!.id}
                         >
-                          {downloadingFile === requirement.file.id ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-                              Downloading...
-                            </>
+                          {isDownloading === requirement.activity_file!.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
                           ) : (
-                            <>
-                              <Download className="h-4 w-4" />
-                              Download
-                            </>
+                            <Download className="h-4 w-4 mr-2" />
                           )}
+                          Download
                         </Button>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   )
 }

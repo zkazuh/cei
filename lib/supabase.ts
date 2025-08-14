@@ -5,117 +5,220 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Database types
-export interface User {
-  id: string
-  username: string
-  password_hash: string
-  role: string
-  created_at: string
+export type Database = {
+  public: {
+    Tables: {
+      users: {
+        Row: {
+          id: string
+          email: string
+          name: string
+          password_hash: string
+          role: "admin" | "user"
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          name: string
+          password_hash: string
+          role?: "admin" | "user"
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          name?: string
+          password_hash?: string
+          role?: "admin" | "user"
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      employees: {
+        Row: {
+          id: string
+          employee_number: string
+          name: string
+          category: "regular" | "outsourced" | "teacher"
+          status: "active" | "inactive"
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_number: string
+          name: string
+          category?: "regular" | "outsourced" | "teacher"
+          status?: "active" | "inactive"
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          employee_number?: string
+          name?: string
+          category?: "regular" | "outsourced" | "teacher"
+          status?: "active" | "inactive"
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      attendance: {
+        Row: {
+          id: string
+          employee_id: string
+          date: string
+          morning_status: "present" | "absent" | "justified" | "vacation" | "sick_leave"
+          afternoon_status: "present" | "absent" | "justified" | "vacation" | "sick_leave"
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          date: string
+          morning_status: "present" | "absent" | "justified" | "vacation" | "sick_leave"
+          afternoon_status: "present" | "absent" | "justified" | "vacation" | "sick_leave"
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          date?: string
+          morning_status?: "present" | "absent" | "justified" | "vacation" | "sick_leave"
+          afternoon_status?: "present" | "absent" | "justified" | "vacation" | "sick_leave"
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      activity_files: {
+        Row: {
+          id: string
+          employee_id: string
+          filename: string
+          file_path: string
+          file_size: number
+          mime_type: string
+          upload_date: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          filename: string
+          file_path: string
+          file_size: number
+          mime_type: string
+          upload_date?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          filename?: string
+          file_path?: string
+          file_size?: number
+          mime_type?: string
+          upload_date?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      monthly_file_requirements: {
+        Row: {
+          id: string
+          employee_id: string
+          year: number
+          month: number
+          due_date: string
+          status: "pending" | "submitted" | "overdue"
+          submitted_at: string | null
+          activity_file_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          year: number
+          month: number
+          due_date: string
+          status?: "pending" | "submitted" | "overdue"
+          submitted_at?: string | null
+          activity_file_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          year?: number
+          month?: number
+          due_date?: string
+          status?: "pending" | "submitted" | "overdue"
+          submitted_at?: string | null
+          activity_file_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      activity_logs: {
+        Row: {
+          id: string
+          user_id: string
+          action: string
+          table_name: string
+          record_id: string
+          old_values: any
+          new_values: any
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          action: string
+          table_name: string
+          record_id: string
+          old_values?: any
+          new_values?: any
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          action?: string
+          table_name?: string
+          record_id?: string
+          old_values?: any
+          new_values?: any
+          created_at?: string
+        }
+      }
+    }
+    Functions: {
+      create_monthly_requirements_for_teachers: {
+        Args: {
+          target_year: number
+          target_month: number
+        }
+        Returns: number
+      }
+      update_overdue_requirements: {
+        Args: {}
+        Returns: number
+      }
+    }
+  }
 }
 
-export interface Employee {
-  id: string
-  name: string
-  position: string
-  department: string
-  hire_date: string
-  status: "active" | "inactive"
-  category: "regular" | "outsourced" | "teacher"
-  created_at: string
-  updated_at: string
-}
-
-export interface Attendance {
-  id: string
-  employee_id: string
-  date: string
-  status: "present" | "absent" | "late" | "justified"
-  check_in_time?: string
-  check_out_time?: string
-  notes?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface AttendanceJustification {
-  id: string
-  attendance_id: string
-  reason: string
-  justification_type: "medical" | "personal" | "official" | "other"
-  supporting_document?: string
-  approved_by?: string
-  approved_at?: string
-  status: "pending" | "approved" | "rejected"
-  created_at: string
-  updated_at: string
-}
-
-export interface ActivityFile {
-  id: string
-  employee_id: string
-  file_name: string
-  file_path: string
-  file_type: string
-  file_size: number
-  upload_date: string
-  description?: string
-  status: "pending" | "approved" | "rejected"
-  reviewed_by?: string
-  reviewed_at?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface ActivityLog {
-  id: string
-  employee_id: string
-  activity_type: string
-  description: string
-  hours_logged: number
-  date: string
-  status: "pending" | "approved" | "rejected"
-  approved_by?: string
-  approved_at?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface MonthlyFileRequirement {
-  id: string
-  employee_id: string
-  year: number
-  month: number
-  due_date: string
-  status: "pending" | "submitted" | "overdue"
-  submitted_at?: string
-  file_id?: string
-  created_at: string
-  updated_at: string
-}
-
-// Helper types for joins
-export interface EmployeeWithAttendance extends Employee {
-  attendance?: Attendance[]
-}
-
-export interface AttendanceWithEmployee extends Attendance {
-  employee?: Employee
-}
-
-export interface AttendanceWithJustification extends Attendance {
-  justification?: AttendanceJustification
-}
-
-export interface ActivityFileWithEmployee extends ActivityFile {
-  employee?: Employee
-}
-
-export interface ActivityLogWithEmployee extends ActivityLog {
-  employee?: Employee
-}
-
-export interface MonthlyFileRequirementWithEmployee extends MonthlyFileRequirement {
-  employee?: Employee
-  file?: ActivityFile
-}
+export type User = Database["public"]["Tables"]["users"]["Row"]
+export type Employee = Database["public"]["Tables"]["employees"]["Row"]
+export type MonthlyFileRequirement = Database["public"]["Tables"]["monthly_file_requirements"]["Row"]
+export type ActivityFile = Database["public"]["Tables"]["activity_files"]["Row"]
+export type ActivityLog = Database["public"]["Tables"]["activity_logs"]["Row"]
