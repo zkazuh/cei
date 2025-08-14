@@ -9,7 +9,7 @@ export async function getEmployees(): Promise<Employee[]> {
         *,
         users!inner(*)
       `)
-      .eq("is_active", true)
+      .eq("status", "active")
       .order("name", { ascending: true, foreignTable: "users" })
 
     if (error) {
@@ -41,7 +41,7 @@ export async function getEmployeeByUserId(userId: string): Promise<Employee | nu
       `,
       )
       .eq("user_id", userId)
-      .eq("is_active", true)
+      .eq("status", "active")
       .limit(1) // ensure only one row is ever returned
       .maybeSingle() // returns null instead of error when 0 rows
 
