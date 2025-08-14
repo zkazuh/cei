@@ -49,7 +49,7 @@ export async function createEmployee(employeeData: CreateEmployeeData, createdBy
       position: employeeData.position,
       hire_date: employeeData.hire_date,
       category: employeeData.category,
-      is_active: true,
+      status: "active",
     })
 
     if (employeeError) {
@@ -147,7 +147,7 @@ export async function updateEmployee(
     if (updateData.position) employeeUpdates.position = updateData.position
     if (updateData.hire_date) employeeUpdates.hire_date = updateData.hire_date
     if (updateData.category) employeeUpdates.category = updateData.category
-    if (updateData.is_active !== undefined) employeeUpdates.is_active = updateData.is_active
+    if (updateData.is_active !== undefined) employeeUpdates.status = updateData.is_active ? "active" : "inactive"
 
     if (Object.keys(employeeUpdates).length > 0) {
       const { error: employeeError } = await supabase.from("employees").update(employeeUpdates).eq("id", employeeId)
@@ -182,7 +182,7 @@ export async function updateEmployee(
         position: currentEmployee.position,
         hire_date: currentEmployee.hire_date,
         category: currentEmployee.category,
-        is_active: currentEmployee.is_active,
+        status: currentEmployee.status,
       },
       new_values: updateData,
     })
@@ -212,7 +212,7 @@ export async function deleteEmployee(employeeId: string, deletedBy: string): Pro
     }
 
     // Soft delete - just mark as inactive
-    const { error: updateError } = await supabase.from("employees").update({ is_active: false }).eq("id", employeeId)
+    const { error: updateError } = await supabase.from("employees").update({ status: "inactive" }).eq("id", employeeId)
 
     if (updateError) {
       console.error("Error deactivating employee:", updateError)
@@ -250,7 +250,7 @@ export async function getAllEmployees(includeInactive = false): Promise<Employee
       .order("employee_number")
 
     if (!includeInactive) {
-      query = query.eq("is_active", true)
+      query = query.eq("status", "active")
     }
 
     const { data, error } = await query
@@ -275,7 +275,7 @@ export async function getEmployeeStats(): Promise<{
   inactiveEmployees: number
 }> {
   try {
-    const { data: employees } = await supabase.from("employees").select("category, is_active")
+    const { data: employees } = await supabase.from("employees").select("category, status")
 
     if (!employees) {
       return {
@@ -288,10 +288,10 @@ export async function getEmployeeStats(): Promise<{
     }
 
     const totalEmployees = employees.length
-    const regularEmployees = employees.filter((e) => e.category === "regular" && e.is_active).length
-    const outsourcedEmployees = employees.filter((e) => e.category === "outsourced" && e.is_active).length
-    const teacherEmployees = employees.filter((e) => e.category === "teacher" && e.is_active).length
-    const inactiveEmployees = employees.filter((e) => !e.is_active).length
+    const regularEmployees = employees.filter((e) => e.category === "regular" && e.status === "active").length
+    const outsourcedEmployees = employees.filter((e) => e.category === "outsourced" && e.status === "active").length
+    const teacherEmployees = employees.filter((e) => e.category === "teacher" && e.status === "active").length
+    const inactiveEmployees = employees.filter((e) => e.status !== "active").length
 
     return {
       totalEmployees,
