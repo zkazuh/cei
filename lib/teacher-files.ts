@@ -12,27 +12,65 @@ export async function getMonthlyRequirements(year?: number, month?: number): Pro
       .from("monthly_file_requirements")
       .select(`
         *,
-        employees!inner(
-          *,
-          users!inner(*)
-        ),
         activity_files(*)
       `)
       .order("due_date", { ascending: true })
-      .order("name", { ascending: true, foreignTable: "employees.users" })
 
     if (year && month) {
       query = query.eq("year", year).eq("month", month)
     }
 
-    const { data, error } = await query
+    const { data: requirements, error } = await query
 
     if (error) {
       console.error("Error fetching monthly requirements:", error)
       return []
     }
 
-    return data || []
+    if (!requirements) return []
+
+    const employeeIds = [...new Set(requirements.map((req) => req.employee_id))]
+
+    const { data: employees, error: employeesError } = await supabase
+      .from("employees")
+      .select("*")
+      .in("id", employeeIds)
+
+    if (employeesError) {
+      console.error("Error fetching employees:", employeesError)
+      return requirements
+    }
+
+    const userIds = [...new Set(employees?.map((emp) => emp.user_id).filter(Boolean) || [])]
+
+    const { data: users, error: usersError } = await supabase.from("users").select("*").in("id", userIds)
+
+    if (usersError) {
+      console.error("Error fetching users:", usersError)
+    }
+
+    const enrichedRequirements = requirements.map((req) => {
+      const employee = employees?.find((emp) => emp.id === req.employee_id)
+      const user = employee ? users?.find((u) => u.id === employee.user_id) : null
+
+      return {
+        ...req,
+        employees: employee
+          ? {
+              ...employee,
+              users: user,
+            }
+          : null,
+      }
+    })
+
+    enrichedRequirements.sort((a, b) => {
+      const nameA = a.employees?.users?.name || a.employees?.name || ""
+      const nameB = b.employees?.users?.name || b.employees?.name || ""
+      return nameA.localeCompare(nameB)
+    })
+
+    return enrichedRequirements
   } catch (error) {
     console.error("Error fetching monthly requirements:", error)
     return []
