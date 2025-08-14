@@ -96,11 +96,13 @@ export function getCurrentReportPeriod(): ReportPeriod {
 }
 
 function getAttendanceCode(
-  status: "present" | "absent",
+  status: "present" | "absent" | "late",
   justificationType?: "medical" | "justified" | "banked_hours" | "other" | "course" | "recess" | "meeting",
 ): "C" | "F" | "A" | "AF" | "CR" | "RE" | "R" {
   if (status === "present") {
     return "C" // Present
+  } else if (status === "late") {
+    return "C" // Late but present - count as present
   } else {
     // Absent - check justification type
     switch (justificationType) {
@@ -133,11 +135,11 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
       .select(`
         id,
         employee_number,
+        name,
         department,
-        position,
-        users!inner(name)
+        position
       `)
-      .eq("is_active", true)
+      .eq("status", "active") // Use status instead of is_active
       .eq("category", "regular") // Only include regular employees in reports
       .order("employee_number")
 
@@ -146,7 +148,7 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
       return { reportPeriod, employees: [] }
     }
 
-    // --- fetch attendance with graceful fallback -------------------
+    // Fetch attendance with graceful fallback
     const baseSelect = `
         employee_id,
         date,
@@ -154,7 +156,7 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
         attendance_justifications(justification_type)
       ` as const
 
-    // try with `period` first (the new column)
+    // Try with `period` first (the new column)
     let attendanceSelect = `${baseSelect}, period`
     let { data: attendanceData, error: attendanceError } = await supabase
       .from("attendance")
@@ -162,7 +164,7 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
       .gte("date", reportPeriod.startDate)
       .lte("date", reportPeriod.endDate)
 
-    // if the column doesn't exist, retry without it and treat everything as morning
+    // If the column doesn't exist, retry without it and treat everything as morning
     if (attendanceError && /period/.test(attendanceError.message)) {
       console.warn(
         "[attendance-report] The `period` column is missing. Falling back to single-period mode. " +
@@ -176,7 +178,7 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
         .gte("date", reportPeriod.startDate)
         .lte("date", reportPeriod.endDate))
 
-      // when period is missing, we'll consider every record as morning
+      // When period is missing, we'll consider every record as morning
       attendanceData = (attendanceData || []).map((rec: any) => ({ ...rec, period: "morning" }))
     }
 
@@ -236,7 +238,7 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
       return {
         employee: {
           id: employee.id,
-          name: employee.users.name,
+          name: employee.name,
           employee_number: employee.employee_number,
           department: employee.department || "",
           position: employee.position || "",
