@@ -123,10 +123,14 @@ export async function getEmployeeStats(): Promise<{
       else if (employee.status === "inactive") stats.inactive++
 
       // Category counts
-      stats.byCategory[employee.category] = (stats.byCategory[employee.category] || 0) + 1
+      if (employee.category) {
+        stats.byCategory[employee.category] = (stats.byCategory[employee.category] || 0) + 1
+      }
 
       // Department counts
-      stats.byDepartment[employee.department] = (stats.byDepartment[employee.department] || 0) + 1
+      if (employee.department) {
+        stats.byDepartment[employee.department] = (stats.byDepartment[employee.department] || 0) + 1
+      }
     })
 
     return stats
