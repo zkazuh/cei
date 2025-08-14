@@ -5,66 +5,51 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Database types
+// Types
 export interface User {
   id: string
   email: string
-  name: string
-  role: "admin" | "employee"
+  role: string
   created_at: string
   updated_at: string
 }
 
 export interface Employee {
   id: string
-  user_id: string
+  name: string
   employee_number: string
-  department: string | null
-  position: string | null
-  hire_date: string | null
-  category: "regular" | "outsourced" | "teacher"
-  is_active: boolean
+  department: string
+  position: string
+  hire_date: string
+  status: string
+  category: string
   created_at: string
   updated_at: string
-  users?: User
 }
 
 export interface Attendance {
   id: string
   employee_id: string
   date: string
-  period: "morning" | "afternoon"
-  status: "present" | "absent"
-  marked_by: string
+  status: string
+  hours_worked: number
+  notes?: string
   created_at: string
   updated_at: string
-  employees?: Employee
-  attendance_justifications?: AttendanceJustification[]
-}
-
-export interface AttendanceJustification {
-  id: string
-  attendance_id: string
-  justification_type: "medical" | "justified" | "banked_hours" | "other" | "course" | "recess" | "meeting"
-  justification_text: string
-  created_by: string
-  created_at: string
-  updated_at: string
+  employee?: Employee
 }
 
 export interface ActivityFile {
   id: string
   employee_id: string
-  file_name: string
+  filename: string
   file_path: string
   file_size: number
-  file_type: string
-  status: "pending" | "approved" | "rejected"
-  reviewed_by: string | null
-  reviewed_at: string | null
+  mime_type: string
+  upload_date: string
   created_at: string
   updated_at: string
-  employees?: Employee
+  employee?: Employee
 }
 
 export interface MonthlyFileRequirement {
@@ -73,21 +58,21 @@ export interface MonthlyFileRequirement {
   year: number
   month: number
   due_date: string
-  status: "pending" | "submitted" | "overdue"
-  submitted_file_id: string | null
+  status: string
+  submitted_at?: string
+  activity_file_id?: string
   created_at: string
   updated_at: string
-  employees?: Employee & { users: User }
-  activity_files?: ActivityFile
+  employee?: Employee
+  activity_file?: ActivityFile
 }
 
 export interface ActivityLog {
   id: string
-  user_id: string
+  user_id?: string
   action: string
-  table_name: string
-  record_id: string | null
-  old_values: any
-  new_values: any
+  entity_type: string
+  entity_id?: string
+  details?: any
   created_at: string
 }

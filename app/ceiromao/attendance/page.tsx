@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar, Users, Clock, CheckCircle } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -19,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CheckCircle, XCircle, MessageSquare, CalendarIcon, Loader2, Sun, Moon } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
   getAttendanceForDate,
@@ -30,7 +29,6 @@ import {
 import { getEmployees } from "@/lib/employees"
 import type { Attendance, Employee } from "@/lib/supabase"
 import { format } from "date-fns"
-import { cn } from "@/lib/utils"
 
 interface AttendanceWithEmployee extends Attendance {
   employees: Employee & {
@@ -60,6 +58,7 @@ export default function AttendancePage() {
     presentCount: 0,
     absentCount: 0,
     attendanceRate: 0,
+    lateCount: 0,
   })
 
   useEffect(() => {
@@ -267,72 +266,75 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Attendance Tracking</h1>
-          <p className="mt-2 text-gray-600">Manage employee attendance with morning/afternoon periods</p>
-        </div>
-
-        {/* Date Picker */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className={cn("w-[280px] justify-start text-left font-normal", !selectedDate && "text-muted-foreground")}
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => date && setSelectedDate(date)}
-              initialFocus
-            />
-          </PopoverContent>
-        </Popover>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Calendar className="h-8 w-8" />
+          Attendance
+        </h1>
+        <p className="text-muted-foreground">Track and manage employee attendance</p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <CheckCircle className="h-8 w-8 text-green-500" />
-              <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">{stats.presentCount}</p>
-                <p className="text-sm text-gray-600">Present {isToday ? "Today" : "on Selected Date"}</p>
-              </div>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Today's Attendance</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalEmployees}</div>
+            <p className="text-xs text-muted-foreground">Out of 28 employees</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <XCircle className="h-8 w-8 text-red-500" />
-              <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">{stats.absentCount}</p>
-                <p className="text-sm text-gray-600">Absent {isToday ? "Today" : "on Selected Date"}</p>
-              </div>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Present</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.presentCount}</div>
+            <p className="text-xs text-muted-foreground">On time arrivals</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <CalendarIcon className="h-8 w-8 text-blue-500" />
-              <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">{stats.attendanceRate}%</p>
-                <p className="text-sm text-gray-600">Attendance Rate</p>
-              </div>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Late</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{stats.lateCount}</div>
+            <p className="text-xs text-muted-foreground">Late arrivals</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Absent</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.absentCount}</div>
+            <p className="text-xs text-muted-foreground">Not present today</p>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Attendance Management</CardTitle>
+          <CardDescription>
+            This feature is coming soon. You'll be able to track daily attendance, generate reports, and manage employee
+            schedules.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">Attendance tracking features will be available soon.</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Employee List */}
       <Card>
@@ -363,7 +365,7 @@ export default function AttendancePage() {
                     {/* Morning Period */}
                     <div className="flex flex-col items-center space-y-2">
                       <div className="flex items-center space-x-1">
-                        <Sun className="h-4 w-4 text-yellow-500" />
+                        <Users className="h-4 w-4 text-blue-500" />
                         <span className="text-xs font-medium">Morning</span>
                       </div>
 
@@ -417,7 +419,7 @@ export default function AttendancePage() {
                                   onClick={() => openJustificationDialog(morning)}
                                   disabled={user?.role !== "admin"}
                                 >
-                                  <MessageSquare className="h-3 w-3 mr-1" />
+                                  <Users className="h-3 w-3 mr-1" />
                                   {morning.attendance_justifications?.[0] ? "Edit" : "Add"}
                                 </Button>
                               </DialogTrigger>
@@ -442,7 +444,7 @@ export default function AttendancePage() {
                     {/* Afternoon Period */}
                     <div className="flex flex-col items-center space-y-2">
                       <div className="flex items-center space-x-1">
-                        <Moon className="h-4 w-4 text-blue-500" />
+                        <Users className="h-4 w-4 text-blue-500" />
                         <span className="text-xs font-medium">Afternoon</span>
                       </div>
 
@@ -496,7 +498,7 @@ export default function AttendancePage() {
                                   onClick={() => openJustificationDialog(afternoon)}
                                   disabled={user?.role !== "admin"}
                                 >
-                                  <MessageSquare className="h-3 w-3 mr-1" />
+                                  <Users className="h-3 w-3 mr-1" />
                                   {afternoon.attendance_justifications?.[0] ? "Edit" : "Add"}
                                 </Button>
                               </DialogTrigger>

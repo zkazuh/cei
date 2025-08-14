@@ -3,14 +3,7 @@ import type { Employee } from "./supabase"
 
 export async function getEmployees(): Promise<Employee[]> {
   try {
-    const { data, error } = await supabase
-      .from("employees")
-      .select(`
-        *,
-        users!inner(*)
-      `)
-      .eq("is_active", true)
-      .order("name", { ascending: true, foreignTable: "users" })
+    const { data, error } = await supabase.from("employees").select("*").order("name")
 
     if (error) {
       console.error("Error fetching employees:", error)
@@ -19,40 +12,114 @@ export async function getEmployees(): Promise<Employee[]> {
 
     return data || []
   } catch (error) {
-    console.error("Error fetching employees:", error)
+    console.error("Error in getEmployees:", error)
     return []
   }
 }
 
-export async function getEmployeeByUserId(userId: string): Promise<Employee | null> {
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  if (!UUID_REGEX.test(userId)) {
-    console.warn("getEmployeeByUserId: invalid id – forcing re-login")
-    return null
-  }
-
+export async function getEmployeeStats(): Promise<{
+  total: number
+  active: number
+  inactive: number
+  byDepartment: Record<string, number>
+  byCategory: Record<string, number>
+}> {
   try {
-    const { data, error } = await supabase
-      .from("employees")
-      .select(
-        `
-        *,
-        users!inner(*)
-      `,
-      )
-      .eq("user_id", userId)
-      .eq("is_active", true)
-      .limit(1) // ensure only one row is ever returned
-      .maybeSingle() // returns null instead of error when 0 rows
+    const { data, error } = await supabase.from("employees").select("status, department, category")
 
     if (error) {
-      console.error("Error fetching employee:", error)
+      console.error("Error fetching employee stats:", error)
+      return {
+        total: 0,
+        active: 0,
+        inactive: 0,
+        byDepartment: {},
+        byCategory: {},
+      }
+    }
+
+    const stats = {
+      total: data?.length || 0,
+      active: 0,
+      inactive: 0,
+      byDepartment: {} as Record<string, number>,
+      byCategory: {} as Record<string, number>,
+    }
+
+    data?.forEach((employee) => {
+      // Status counts
+      if (employee.status === "active") {
+        stats.active++
+      } else {
+        stats.inactive++
+      }
+
+      // Department counts
+      stats.byDepartment[employee.department] = (stats.byDepartment[employee.department] || 0) + 1
+
+      // Category counts
+      stats.byCategory[employee.category] = (stats.byCategory[employee.category] || 0) + 1
+    })
+
+    return stats
+  } catch (error) {
+    console.error("Error in getEmployeeStats:", error)
+    return {
+      total: 0,
+      active: 0,
+      inactive: 0,
+      byDepartment: {},
+      byCategory: {},
+    }
+  }
+}
+
+export async function createEmployee(
+  employee: Omit<Employee, "id" | "created_at" | "updated_at">,
+): Promise<Employee | null> {
+  try {
+    const { data, error } = await supabase.from("employees").insert(employee).select().single()
+
+    if (error) {
+      console.error("Error creating employee:", error)
       return null
     }
 
-    return data ?? null
+    return data
   } catch (error) {
-    console.error("Error fetching employee:", error)
+    console.error("Error in createEmployee:", error)
     return null
+  }
+}
+
+export async function updateEmployee(id: string, updates: Partial<Employee>): Promise<Employee | null> {
+  try {
+    const { data, error } = await supabase.from("employees").update(updates).eq("id", id).select().single()
+
+    if (error) {
+      console.error("Error updating employee:", error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in updateEmployee:", error)
+    return null
+  }
+}
+
+export async function deleteEmployee(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("employees").delete().eq("id", id)
+
+    if (error) {
+      console.error("Error deleting employee:", error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in deleteEmployee:", error)
+    return false
   }
 }

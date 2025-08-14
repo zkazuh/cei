@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { FileText, Download, Calendar, Loader2, ChevronLeft, ChevronRight, Sun, Moon } from "lucide-react"
+import { FileText, Download, Calendar, Loader2, ChevronLeft, ChevronRight, Sun, Moon, BarChart3 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
   getMonthlyAttendanceReport,
@@ -235,27 +235,75 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Monthly Attendance Report</h1>
-          <p className="mt-2 text-gray-600">{getReportPeriodTitle(reportPeriod)}</p>
-          <p className="text-sm text-gray-500 mt-1">
-            Period: {formatReportDate(reportPeriod.startDate)} to {formatReportDate(reportPeriod.endDate)} • Smart
-            Period Merging
-          </p>
-        </div>
-
-        <div className="flex space-x-2">
-          <Button onClick={() => selectedPeriod && fetchReport(selectedPeriod)} variant="outline">
-            <Calendar className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-          <Button onClick={exportToCSV}>
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <FileText className="h-8 w-8" />
+          Reports
+        </h1>
+        <p className="text-muted-foreground">Generate and view various HR reports</p>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Employee Reports</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">12</div>
+            <p className="text-xs text-muted-foreground">Available reports</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Attendance Reports</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">8</div>
+            <p className="text-xs text-muted-foreground">Monthly reports</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">File Reports</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">15</div>
+            <p className="text-xs text-muted-foreground">Teacher file reports</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Downloads</CardTitle>
+            <Download className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">156</div>
+            <p className="text-xs text-muted-foreground">This month</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Report Generation</CardTitle>
+          <CardDescription>
+            This feature is coming soon. You'll be able to generate comprehensive reports for employees, attendance, and
+            file submissions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">Advanced reporting features will be available soon.</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Period Navigation */}
       <Card>
