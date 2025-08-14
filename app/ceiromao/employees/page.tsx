@@ -1,34 +1,17 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import {
-  getEmployees,
-  createEmployee,
-  updateEmployee,
-  deleteEmployee,
-  getEmployeeStats,
-} from "@/lib/employee-management"
+import { getEmployees, getEmployeeStats, getDepartments } from "@/lib/employee-management"
 import type { Employee } from "@/lib/supabase"
-import { Plus, Edit, Trash2, Users, UserCheck, UserX } from "lucide-react"
+import { Users, UserCheck, UserX, Building, Search } from "lucide-react"
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -36,162 +19,83 @@ export default function EmployeesPage() {
     total: 0,
     active: 0,
     inactive: 0,
-    byCategory: {} as Record<string, number>,
     byDepartment: {} as Record<string, number>,
+    byCategory: {} as Record<string, number>,
+    recentHires: [] as Employee[],
   })
+  const [departments, setDepartments] = useState<string[]>([])
   const [filters, setFilters] = useState({
     department: "all",
     status: "all",
     category: "all",
+    search: "",
   })
   const [isLoading, setIsLoading] = useState(true)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
-  const [formData, setFormData] = useState({
-    employee_number: "",
-    name: "",
-    department: "",
-    position: "",
-    hire_date: "",
-    status: "active" as "active" | "inactive",
-    category: "regular" as "regular" | "outsourced" | "teacher",
-  })
   const { toast } = useToast()
 
   useEffect(() => {
     loadEmployees()
     loadStats()
+    loadDepartments()
   }, [filters])
 
   const loadEmployees = async () => {
     setIsLoading(true)
-    const data = await getEmployees(filters)
-    setEmployees(data)
-    setIsLoading(false)
-  }
-
-  const loadStats = async () => {
-    const statsData = await getEmployeeStats()
-    setStats(statsData)
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
     try {
-      if (editingEmployee) {
-        const updated = await updateEmployee(editingEmployee.id, formData)
-        if (updated) {
-          toast({
-            title: "Success",
-            description: "Employee updated successfully",
-          })
-          loadEmployees()
-          loadStats()
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to update employee",
-            variant: "destructive",
-          })
-        }
-      } else {
-        const created = await createEmployee(formData)
-        if (created) {
-          toast({
-            title: "Success",
-            description: "Employee created successfully",
-          })
-          loadEmployees()
-          loadStats()
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to create employee",
-            variant: "destructive",
-          })
-        }
-      }
-
-      setIsDialogOpen(false)
-      resetForm()
+      const data = await getEmployees(filters)
+      setEmployees(data)
     } catch (error) {
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: "Failed to load employees",
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleEdit = (employee: Employee) => {
-    setEditingEmployee(employee)
-    setFormData({
-      employee_number: employee.employee_number,
-      name: employee.name,
-      department: employee.department,
-      position: employee.position,
-      hire_date: employee.hire_date.split("T")[0], // Format date for input
-      status: employee.status,
-      category: employee.category,
-    })
-    setIsDialogOpen(true)
-  }
-
-  const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this employee?")) {
-      const success = await deleteEmployee(id)
-      if (success) {
-        toast({
-          title: "Success",
-          description: "Employee deleted successfully",
-        })
-        loadEmployees()
-        loadStats()
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to delete employee",
-          variant: "destructive",
-        })
-      }
+  const loadStats = async () => {
+    try {
+      const statsData = await getEmployeeStats()
+      setStats(statsData)
+    } catch (error) {
+      console.error("Error loading stats:", error)
     }
   }
 
-  const resetForm = () => {
-    setEditingEmployee(null)
-    setFormData({
-      employee_number: "",
-      name: "",
-      department: "",
-      position: "",
-      hire_date: "",
-      status: "active",
-      category: "regular",
-    })
+  const loadDepartments = async () => {
+    try {
+      const deptData = await getDepartments()
+      setDepartments(deptData)
+    } catch (error) {
+      console.error("Error loading departments:", error)
+    }
   }
 
   const getStatusBadge = (status: string) => {
     return status === "active" ? (
       <Badge variant="default" className="bg-green-100 text-green-800">
+        <UserCheck className="w-3 h-3 mr-1" />
         Active
       </Badge>
     ) : (
       <Badge variant="secondary" className="bg-red-100 text-red-800">
+        <UserX className="w-3 h-3 mr-1" />
         Inactive
       </Badge>
     )
   }
 
   const getCategoryBadge = (category: string) => {
-    const variants = {
-      regular: "default",
-      outsourced: "secondary",
-      teacher: "outline",
-    } as const
+    const colors = {
+      regular: "bg-blue-100 text-blue-800",
+      teacher: "bg-purple-100 text-purple-800",
+      outsourced: "bg-orange-100 text-orange-800",
+    }
 
     return (
-      <Badge variant={variants[category as keyof typeof variants] || "default"}>
+      <Badge variant="outline" className={colors[category as keyof typeof colors] || "bg-gray-100 text-gray-800"}>
         {category.charAt(0).toUpperCase() + category.slice(1)}
       </Badge>
     )
@@ -202,129 +106,8 @@ export default function EmployeesPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
-          <p className="text-muted-foreground">Manage your organization's employees</p>
+          <p className="text-muted-foreground">Manage employee information and records</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Employee
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>{editingEmployee ? "Edit Employee" : "Add New Employee"}</DialogTitle>
-              <DialogDescription>
-                {editingEmployee ? "Update the employee information below." : "Fill in the employee information below."}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="employee_number" className="text-right">
-                    Employee #
-                  </Label>
-                  <Input
-                    id="employee_number"
-                    value={formData.employee_number}
-                    onChange={(e) => setFormData({ ...formData, employee_number: e.target.value })}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Name
-                  </Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="department" className="text-right">
-                    Department
-                  </Label>
-                  <Input
-                    id="department"
-                    value={formData.department}
-                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="position" className="text-right">
-                    Position
-                  </Label>
-                  <Input
-                    id="position"
-                    value={formData.position}
-                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="hire_date" className="text-right">
-                    Hire Date
-                  </Label>
-                  <Input
-                    id="hire_date"
-                    type="date"
-                    value={formData.hire_date}
-                    onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="status" className="text-right">
-                    Status
-                  </Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value: "active" | "inactive") => setFormData({ ...formData, status: value })}
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="category" className="text-right">
-                    Category
-                  </Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value: "regular" | "outsourced" | "teacher") =>
-                      setFormData({ ...formData, category: value })
-                    }
-                  >
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="regular">Regular</SelectItem>
-                      <SelectItem value="outsourced">Outsourced</SelectItem>
-                      <SelectItem value="teacher">Teacher</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit">{editingEmployee ? "Update" : "Create"} Employee</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Stats Cards */}
@@ -358,11 +141,11 @@ export default function EmployeesPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Teachers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Departments</CardTitle>
+            <Building className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.byCategory.teacher || 0}</div>
+            <div className="text-2xl font-bold">{Object.keys(stats.byDepartment).length}</div>
           </CardContent>
         </Card>
       </div>
@@ -371,10 +154,22 @@ export default function EmployeesPage() {
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
-          <CardDescription>Filter employees by department, status, or category</CardDescription>
+          <CardDescription>Filter employees by department, status, category, or search</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-5">
+            <div className="space-y-2">
+              <Label>Search</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search employees..."
+                  value={filters.search}
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                  className="pl-8"
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label>Department</Label>
               <Select
@@ -386,9 +181,9 @@ export default function EmployeesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Departments</SelectItem>
-                  {Object.keys(stats.byDepartment).map((dept) => (
+                  {departments.map((dept) => (
                     <SelectItem key={dept} value={dept}>
-                      {dept} ({stats.byDepartment[dept]})
+                      {dept}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -416,10 +211,20 @@ export default function EmployeesPage() {
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   <SelectItem value="regular">Regular</SelectItem>
-                  <SelectItem value="outsourced">Outsourced</SelectItem>
                   <SelectItem value="teacher">Teacher</SelectItem>
+                  <SelectItem value="outsourced">Outsourced</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>&nbsp;</Label>
+              <Button
+                onClick={() => setFilters({ department: "all", status: "all", category: "all", search: "" })}
+                variant="outline"
+                className="w-full"
+              >
+                Clear Filters
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -440,36 +245,25 @@ export default function EmployeesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employee #</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>Department</TableHead>
+                  <TableHead>Employee #</TableHead>
                   <TableHead>Position</TableHead>
-                  <TableHead>Hire Date</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Department</TableHead>
                   <TableHead>Category</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Hire Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {employees.map((employee) => (
                   <TableRow key={employee.id}>
-                    <TableCell className="font-medium">{employee.employee_number}</TableCell>
-                    <TableCell>{employee.name}</TableCell>
-                    <TableCell>{employee.department}</TableCell>
+                    <TableCell className="font-medium">{employee.name}</TableCell>
+                    <TableCell>{employee.employee_number}</TableCell>
                     <TableCell>{employee.position}</TableCell>
-                    <TableCell>{new Date(employee.hire_date).toLocaleDateString()}</TableCell>
-                    <TableCell>{getStatusBadge(employee.status)}</TableCell>
+                    <TableCell>{employee.department}</TableCell>
                     <TableCell>{getCategoryBadge(employee.category)}</TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(employee)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDelete(employee.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    <TableCell>{getStatusBadge(employee.status)}</TableCell>
+                    <TableCell>{new Date(employee.hire_date).toLocaleDateString()}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

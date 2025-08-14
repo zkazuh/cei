@@ -8,24 +8,37 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 export interface User {
   id: string
   email: string
+  role: "admin" | "employee" | "teacher"
   name: string
-  password_hash: string
-  role: "admin" | "user"
   created_at: string
   updated_at: string
 }
 
 export interface Employee {
   id: string
-  employee_number: string
   name: string
-  department: string
+  employee_number: string
   position: string
+  department: string
   hire_date: string
   status: "active" | "inactive"
   category: "regular" | "outsourced" | "teacher"
   created_at: string
   updated_at: string
+}
+
+export interface AttendanceRecord {
+  id: string
+  employee_id: string
+  date: string
+  status: "present" | "absent" | "late" | "justified"
+  check_in_time?: string
+  check_out_time?: string
+  hours_worked?: number
+  notes?: string
+  created_at: string
+  updated_at: string
+  employee?: Employee
 }
 
 export interface ActivityFile {
@@ -38,6 +51,7 @@ export interface ActivityFile {
   upload_date: string
   created_at: string
   updated_at: string
+  employee?: Employee
 }
 
 export interface MonthlyFileRequirement {
@@ -55,24 +69,11 @@ export interface MonthlyFileRequirement {
   activity_file?: ActivityFile
 }
 
-export interface Attendance {
-  id: string
-  employee_id: string
-  date: string
-  morning_status: "present" | "absent" | "justified" | "vacation" | "sick_leave"
-  afternoon_status: "present" | "absent" | "justified" | "vacation" | "sick_leave"
-  created_at: string
-  updated_at: string
-  employee?: Employee
-}
-
 export interface ActivityLog {
   id: string
   user_id: string
   action: string
-  table_name: string
-  record_id: string
-  old_values?: any
-  new_values?: any
+  details: string
   created_at: string
+  user?: User
 }

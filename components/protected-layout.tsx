@@ -2,11 +2,16 @@
 
 import type React from "react"
 
-import { useAuth } from "@/components/auth-provider"
-import { useRouter } from "next/navigation"
 import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "./auth-provider"
 
-export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
+interface ProtectedLayoutProps {
+  children: React.ReactNode
+  requiredRole?: "admin" | "employee" | "teacher"
+}
+
+export function ProtectedLayout({ children, requiredRole }: ProtectedLayoutProps) {
   const { user, isLoading } = useAuth()
   const router = useRouter()
 
@@ -16,10 +21,16 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     }
   }, [user, isLoading, router])
 
+  useEffect(() => {
+    if (user && requiredRole && user.role !== requiredRole && user.role !== "admin") {
+      router.push("/ceiromao")
+    }
+  }, [user, requiredRole, router])
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
     )
   }

@@ -2,42 +2,46 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
 import { getEmployeeStats } from "@/lib/employee-management"
-import { getTeacherFileStats } from "@/lib/teacher-files"
-import { useAuth } from "@/components/auth-provider"
-import { Users, UserCheck, UserX, FileText, CheckCircle, Calendar, AlertCircle, GraduationCap } from "lucide-react"
+import { getFileStats } from "@/lib/teacher-files"
+import { Users, UserCheck, UserX, Building, FileText, Clock, CheckCircle, AlertCircle } from "lucide-react"
 
 export default function DashboardPage() {
-  const { user } = useAuth()
   const [employeeStats, setEmployeeStats] = useState({
     total: 0,
     active: 0,
     inactive: 0,
-    byCategory: {} as Record<string, number>,
     byDepartment: {} as Record<string, number>,
+    byCategory: {} as Record<string, number>,
+    recentHires: [] as any[],
   })
   const [fileStats, setFileStats] = useState({
-    totalRequirements: 0,
-    submitted: 0,
+    total: 0,
     pending: 0,
+    submitted: 0,
     overdue: 0,
-    byMonth: {} as Record<string, { submitted: number; pending: number; overdue: number }>,
   })
   const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
 
   useEffect(() => {
-    loadStats()
+    loadDashboardData()
   }, [])
 
-  const loadStats = async () => {
+  const loadDashboardData = async () => {
     setIsLoading(true)
     try {
-      const [empStats, teacherStats] = await Promise.all([getEmployeeStats(), getTeacherFileStats()])
+      const [empStats, teacherFileStats] = await Promise.all([getEmployeeStats(), getFileStats()])
       setEmployeeStats(empStats)
-      setFileStats(teacherStats)
+      setFileStats(teacherFileStats)
     } catch (error) {
-      console.error("Error loading dashboard stats:", error)
+      console.error("Error loading dashboard data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard data",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -45,25 +49,8 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Loading dashboard data...</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
-                <div className="h-4 w-4 bg-gray-200 rounded animate-pulse"></div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 w-16 bg-gray-200 rounded animate-pulse mb-2"></div>
-                <div className="h-3 w-32 bg-gray-200 rounded animate-pulse"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
     )
   }
@@ -72,7 +59,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back, {user?.name}! Here's an overview of your HR system.</p>
+        <p className="text-muted-foreground">Overview of HR metrics and activities</p>
       </div>
 
       {/* Employee Stats */}
@@ -86,12 +73,12 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{employeeStats.total}</div>
-              <p className="text-xs text-muted-foreground">All registered employees</p>
+              <p className="text-xs text-muted-foreground">All employees</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Employees</CardTitle>
+              <CardTitle className="text-sm font-medium">Active</CardTitle>
               <UserCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -101,22 +88,22 @@ export default function DashboardPage() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Inactive Employees</CardTitle>
+              <CardTitle className="text-sm font-medium">Inactive</CardTitle>
               <UserX className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">{employeeStats.inactive}</div>
-              <p className="text-xs text-muted-foreground">Currently inactive</p>
+              <p className="text-xs text-muted-foreground">Not active</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Teachers</CardTitle>
-              <GraduationCap className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Departments</CardTitle>
+              <Building className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{employeeStats.byCategory.teacher || 0}</div>
-              <p className="text-xs text-muted-foreground">Teaching staff</p>
+              <div className="text-2xl font-bold">{Object.keys(employeeStats.byDepartment).length}</div>
+              <p className="text-xs text-muted-foreground">Active departments</p>
             </CardContent>
           </Card>
         </div>
@@ -132,8 +119,8 @@ export default function DashboardPage() {
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{fileStats.totalRequirements}</div>
-              <p className="text-xs text-muted-foreground">This year</p>
+              <div className="text-2xl font-bold">{fileStats.total}</div>
+              <p className="text-xs text-muted-foreground">All file requirements</p>
             </CardContent>
           </Card>
           <Card>
@@ -143,17 +130,13 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{fileStats.submitted}</div>
-              <p className="text-xs text-muted-foreground">
-                {fileStats.totalRequirements > 0
-                  ? `${Math.round((fileStats.submitted / fileStats.totalRequirements) * 100)}% completion`
-                  : "No requirements"}
-              </p>
+              <p className="text-xs text-muted-foreground">Files submitted</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Pending</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600">{fileStats.pending}</div>
@@ -183,11 +166,11 @@ export default function DashboardPage() {
               <CardDescription>Distribution of employees across departments</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
                 {Object.entries(employeeStats.byDepartment).map(([department, count]) => (
-                  <div key={department} className="flex items-center justify-between p-3 border rounded-lg">
-                    <span className="font-medium">{department}</span>
-                    <Badge variant="secondary">{count}</Badge>
+                  <div key={department} className="flex justify-between items-center">
+                    <span className="text-sm font-medium">{department}</span>
+                    <span className="text-sm text-muted-foreground">{count} employees</span>
                   </div>
                 ))}
               </div>
@@ -206,11 +189,11 @@ export default function DashboardPage() {
               <CardDescription>Distribution of employees by employment type</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
                 {Object.entries(employeeStats.byCategory).map(([category, count]) => (
-                  <div key={category} className="flex items-center justify-between p-3 border rounded-lg">
-                    <span className="font-medium capitalize">{category}</span>
-                    <Badge variant="outline">{count}</Badge>
+                  <div key={category} className="flex justify-between items-center">
+                    <span className="text-sm font-medium capitalize">{category}</span>
+                    <span className="text-sm text-muted-foreground">{count} employees</span>
                   </div>
                 ))}
               </div>
