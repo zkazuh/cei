@@ -269,11 +269,8 @@ export default function AttendancePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Calendar className="h-8 w-8" />
-          Attendance
-        </h1>
-        <p className="text-muted-foreground">Track and manage employee attendance records</p>
+        <h1 className="text-3xl font-bold text-gray-900">Attendance</h1>
+        <p className="text-gray-600">Track employee attendance and working hours</p>
       </div>
 
       {/* Stats Cards */}
@@ -325,13 +322,32 @@ export default function AttendancePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Attendance Management</CardTitle>
-          <CardDescription>Attendance tracking features will be implemented here</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Attendance Management
+          </CardTitle>
+          <CardDescription>
+            This feature is coming soon. You'll be able to track daily attendance, working hours, and generate
+            attendance reports.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">Attendance management coming soon...</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center p-6 border rounded-lg">
+              <Users className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+              <h3 className="font-medium">Daily Attendance</h3>
+              <p className="text-sm text-gray-600">Mark present/absent for employees</p>
+            </div>
+            <div className="text-center p-6 border rounded-lg">
+              <Clock className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+              <h3 className="font-medium">Working Hours</h3>
+              <p className="text-sm text-gray-600">Track hours worked per day</p>
+            </div>
+            <div className="text-center p-6 border rounded-lg">
+              <Calendar className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+              <h3 className="font-medium">Reports</h3>
+              <p className="text-sm text-gray-600">Generate attendance reports</p>
+            </div>
           </div>
         </CardContent>
       </Card>

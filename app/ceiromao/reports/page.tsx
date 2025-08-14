@@ -5,24 +5,11 @@ import { useAuth } from "@/components/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  FileText,
-  Download,
-  Calendar,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  Sun,
-  Moon,
-  BarChart3,
-  TrendingUp,
-} from "lucide-react"
+import { FileText, Loader2, BarChart3, TrendingUp } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
   getMonthlyAttendanceReport,
   formatReportDate,
-  getReportPeriodTitle,
   generateReportPeriods,
   getCurrentReportPeriod,
   getAvailableYears,
@@ -247,15 +234,44 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <BarChart3 className="h-8 w-8" />
-          Reports
-        </h1>
-        <p className="text-muted-foreground">Generate and view various HR reports</p>
+        <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
+        <p className="text-gray-600">Generate and view various HR reports</p>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Report Generation
+          </CardTitle>
+          <CardDescription>
+            This feature is coming soon. You'll be able to generate comprehensive reports on employees, attendance, and
+            file submissions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center p-6 border rounded-lg">
+              <FileText className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+              <h3 className="font-medium">Employee Reports</h3>
+              <p className="text-sm text-gray-600">Detailed employee information and statistics</p>
+            </div>
+            <div className="text-center p-6 border rounded-lg">
+              <BarChart3 className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+              <h3 className="font-medium">Attendance Reports</h3>
+              <p className="text-sm text-gray-600">Attendance patterns and summaries</p>
+            </div>
+            <div className="text-center p-6 border rounded-lg">
+              <TrendingUp className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+              <h3 className="font-medium">File Submission Reports</h3>
+              <p className="text-sm text-gray-600">Teacher file submission analytics</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Report Categories */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {/* <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -303,9 +319,10 @@ export default function ReportsPage() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
-      <Card>
+      {/* Report Center */}
+      {/* <Card>
         <CardHeader>
           <CardTitle>Report Center</CardTitle>
           <CardDescription>Advanced reporting features will be implemented here</CardDescription>
@@ -316,17 +333,17 @@ export default function ReportsPage() {
             <p className="text-muted-foreground">Advanced reporting features coming soon...</p>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Period Navigation */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle className="text-lg">Report Period Selection</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-4">
             {/* Year Selection */}
-            <div className="flex items-center space-x-2">
+      {/* <div className="flex items-center space-x-2">
               <label className="text-sm font-medium">Year:</label>
               <Select
                 value={selectedYear.toString()}
@@ -346,7 +363,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Period Navigation */}
-            <div className="flex items-center space-x-2">
+      {/* <div className="flex items-center space-x-2">
               <Button variant="outline" size="sm" onClick={() => navigatePeriod("prev")}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -361,7 +378,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Period Selection Dropdown */}
-            <div className="flex items-center space-x-2">
+      {/* <div className="flex items-center space-x-2">
               <label className="text-sm font-medium">Period:</label>
               <Select
                 value={selectedPeriod.monthIndex.toString()}
@@ -384,10 +401,10 @@ export default function ReportsPage() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Legend */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle className="text-lg">Legend</CardTitle>
         </CardHeader>
@@ -444,10 +461,10 @@ export default function ReportsPage() {
             </p>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Report Table */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle>Employee Attendance</CardTitle>
           <CardDescription>
@@ -510,10 +527,10 @@ export default function ReportsPage() {
             </table>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center">
@@ -571,7 +588,7 @@ export default function ReportsPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
     </div>
   )
 }

@@ -3,45 +3,31 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import { getCurrentUser, logout } from "@/lib/auth"
-
-interface User {
-  id: string
-  email: string
-  role: string
-}
+import { getCurrentUser, type User } from "@/lib/auth"
 
 interface AuthContextType {
   user: User | null
-  isLoading: boolean
-  logout: () => void
+  loading: boolean
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+})
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const currentUser = getCurrentUser()
     setUser(currentUser)
-    setIsLoading(false)
+    setLoading(false)
   }, [])
 
-  const handleLogout = () => {
-    logout()
-    setUser(null)
-    window.location.href = "/login"
-  }
-
-  return <AuthContext.Provider value={{ user, isLoading, logout: handleLogout }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
+  return useContext(AuthContext)
 }

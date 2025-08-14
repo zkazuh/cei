@@ -1,177 +1,60 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/hooks/use-toast"
-import {
-  getTeacherFileRequirements,
-  getTeacherFileStats,
-  uploadTeacherFile,
-  downloadTeacherFile,
-} from "@/lib/teacher-files"
-import type { MonthlyFileRequirement, Employee } from "@/lib/supabase"
-import { FileText, Upload, Download, Clock, CheckCircle, AlertTriangle, Calendar } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { FileText, Upload, Download, Clock, CheckCircle, AlertTriangle } from "lucide-react"
+import { getMonthlyRequirements, getOverdueRequirements } from "@/lib/teacher-files"
+import type { MonthlyFileRequirement } from "@/lib/supabase"
 
 export default function TeacherFilesPage() {
-  const [requirements, setRequirements] = useState<(MonthlyFileRequirement & { employee: Employee })[]>([])
-  const [stats, setStats] = useState({
-    total: 0,
-    submitted: 0,
-    pending: 0,
-    overdue: 0,
-    byMonth: {} as Record<string, number>,
-  })
-  const [isLoading, setIsLoading] = useState(true)
-  const [uploadingId, setUploadingId] = useState<string | null>(null)
-  const { toast } = useToast()
+  const [requirements, setRequirements] = useState<MonthlyFileRequirement[]>([])
+  const [overdueRequirements, setOverdueRequirements] = useState<MonthlyFileRequirement[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadRequirements()
-    loadStats()
+    async function loadData() {
+      try {
+        const [allRequirements, overdue] = await Promise.all([getMonthlyRequirements(), getOverdueRequirements()])
+        setRequirements(allRequirements)
+        setOverdueRequirements(overdue)
+      } catch (error) {
+        console.error("Error loading teacher files:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
   }, [])
 
-  const loadRequirements = async () => {
-    setIsLoading(true)
-    try {
-      const data = await getTeacherFileRequirements()
-      setRequirements(data)
-    } catch (error) {
-      console.error("Error loading requirements:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load teacher file requirements",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const loadStats = async () => {
-    try {
-      const statsData = await getTeacherFileStats()
-      setStats(statsData)
-    } catch (error) {
-      console.error("Error loading stats:", error)
-    }
-  }
-
-  const handleFileUpload = async (
-    requirementId: string,
-    employeeId: string,
-    year: number,
-    month: number,
-    file: File,
-  ) => {
-    setUploadingId(requirementId)
-    try {
-      const success = await uploadTeacherFile(employeeId, file, year, month)
-      if (success) {
-        toast({
-          title: "Success",
-          description: "File uploaded successfully",
-        })
-        loadRequirements()
-        loadStats()
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to upload file",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error uploading file:", error)
-      toast({
-        title: "Error",
-        description: "Failed to upload file",
-        variant: "destructive",
-      })
-    } finally {
-      setUploadingId(null)
-    }
-  }
-
-  const handleFileDownload = async (fileId: string, filename: string) => {
-    try {
-      const filePath = await downloadTeacherFile(fileId)
-      if (filePath) {
-        // In production, this would trigger an actual download
-        toast({
-          title: "Download",
-          description: `Downloading ${filename}`,
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to download file",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error downloading file:", error)
-      toast({
-        title: "Error",
-        description: "Failed to download file",
-        variant: "destructive",
-      })
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "submitted":
+        return <CheckCircle className="h-4 w-4 text-green-600" />
+      case "overdue":
+        return <AlertTriangle className="h-4 w-4 text-red-600" />
+      default:
+        return <Clock className="h-4 w-4 text-yellow-600" />
     }
   }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "submitted":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Submitted
-          </Badge>
-        )
-      case "pending":
-        return (
-          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-            <Clock className="w-3 h-3 mr-1" />
-            Pending
-          </Badge>
-        )
+        return <Badge className="bg-green-100 text-green-800">Submitted</Badge>
       case "overdue":
-        return (
-          <Badge variant="destructive" className="bg-red-100 text-red-800">
-            <AlertTriangle className="w-3 h-3 mr-1" />
-            Overdue
-          </Badge>
-        )
+        return <Badge className="bg-red-100 text-red-800">Overdue</Badge>
       default:
-        return <Badge variant="outline">{status}</Badge>
+        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
     }
   }
 
-  const getMonthName = (month: number) => {
-    const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ]
-    return months[month - 1]
-  }
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading teacher files...</div>
       </div>
     )
   }
@@ -179,137 +62,120 @@ export default function TeacherFilesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <FileText className="h-8 w-8" />
-          Teacher Files
-        </h1>
-        <p className="text-muted-foreground">Manage monthly activity file requirements for teachers</p>
+        <h1 className="text-3xl font-bold text-gray-900">Teacher Files</h1>
+        <p className="text-gray-600">Manage monthly activity file requirements</p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Requirements</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+      {/* Overdue Requirements Alert */}
+      {overdueRequirements.length > 0 && (
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-800">
+              <AlertTriangle className="h-5 w-5" />
+              Overdue Requirements ({overdueRequirements.length})
+            </CardTitle>
+            <CardDescription className="text-red-700">
+              The following requirements are past their due date and need immediate attention.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">All file requirements</p>
+            <div className="space-y-2">
+              {overdueRequirements.slice(0, 5).map((req) => (
+                <div key={req.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                  <div>
+                    <p className="font-medium">{(req as any).employee?.name}</p>
+                    <p className="text-sm text-gray-600">
+                      {new Date(0, req.month - 1).toLocaleString("default", { month: "long" })} {req.year}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-red-600">Due: {new Date(req.due_date).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-500">
+                      {Math.ceil((new Date().getTime() - new Date(req.due_date).getTime()) / (1000 * 60 * 60 * 24))}{" "}
+                      days overdue
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {overdueRequirements.length > 5 && (
+                <p className="text-sm text-red-600 text-center">
+                  And {overdueRequirements.length - 5} more overdue requirements...
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
+      )}
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Submitted</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.submitted}</div>
-            <p className="text-xs text-muted-foreground">Files submitted</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-            <p className="text-xs text-muted-foreground">Awaiting submission</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
-            <p className="text-xs text-muted-foreground">Past due date</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* File Upload Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Upload Files
+          </CardTitle>
+          <CardDescription>Upload monthly activity files for teachers</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+            <FileText className="mx-auto h-12 w-12 text-gray-400" />
+            <div className="mt-4">
+              <Button variant="outline">
+                <Upload className="mr-2 h-4 w-4" />
+                Choose Files
+              </Button>
+              <p className="mt-2 text-sm text-gray-600">Drag and drop files here, or click to select files</p>
+              <p className="text-xs text-gray-500">Supported formats: PDF, DOC, DOCX (Max 10MB)</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Requirements List */}
       <Card>
         <CardHeader>
-          <CardTitle>File Requirements</CardTitle>
-          <CardDescription>
-            {requirements.length} requirement{requirements.length !== 1 ? "s" : ""} found
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Monthly Requirements ({requirements.length})
+          </CardTitle>
+          <CardDescription>Track monthly activity file submissions</CardDescription>
         </CardHeader>
         <CardContent>
           {requirements.length === 0 ? (
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No file requirements found.</p>
-            </div>
+            <div className="text-center py-8 text-gray-500">No file requirements found.</div>
           ) : (
             <div className="space-y-4">
-              {requirements.map((requirement) => (
-                <div key={requirement.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
-                      <Calendar className="h-5 w-5 text-blue-600" />
-                    </div>
+              {requirements.map((req) => (
+                <div key={req.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                  <div className="flex items-center gap-4">
+                    {getStatusIcon(req.status)}
                     <div>
-                      <h3 className="font-medium">{requirement.employee.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {getMonthName(requirement.month)} {requirement.year}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Due: {new Date(requirement.due_date).toLocaleDateString()}
+                      <h3 className="font-medium">{(req as any).employee?.name}</h3>
+                      <p className="text-sm text-gray-600">
+                        {(req as any).employee?.employee_number} • {(req as any).employee?.department}
                       </p>
                     </div>
                   </div>
-
-                  <div className="flex items-center space-x-2">
-                    {getStatusBadge(requirement.status)}
-
-                    {requirement.status === "pending" && (
-                      <div className="flex items-center space-x-2">
-                        <Input
-                          type="file"
-                          accept=".pdf,.doc,.docx"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (file) {
-                              handleFileUpload(
-                                requirement.id,
-                                requirement.employee_id,
-                                requirement.year,
-                                requirement.month,
-                                file,
-                              )
-                            }
-                          }}
-                          className="hidden"
-                          id={`file-${requirement.id}`}
-                        />
-                        <Label htmlFor={`file-${requirement.id}`}>
-                          <Button variant="outline" size="sm" disabled={uploadingId === requirement.id} asChild>
-                            <span>
-                              <Upload className="h-4 w-4 mr-2" />
-                              {uploadingId === requirement.id ? "Uploading..." : "Upload"}
-                            </span>
-                          </Button>
-                        </Label>
-                      </div>
-                    )}
-
-                    {requirement.status === "submitted" && requirement.activity_file_id && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleFileDownload(requirement.activity_file_id!, "activity-file.pdf")}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Download
-                      </Button>
-                    )}
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="font-medium">
+                        {new Date(0, req.month - 1).toLocaleString("default", { month: "long" })} {req.year}
+                      </p>
+                      <p className="text-sm text-gray-600">Due: {new Date(req.due_date).toLocaleDateString()}</p>
+                      {req.submitted_at && (
+                        <p className="text-xs text-green-600">
+                          Submitted: {new Date(req.submitted_at).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(req.status)}
+                      {req.status === "submitted" && (
+                        <Button variant="outline" size="sm">
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

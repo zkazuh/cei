@@ -1,18 +1,20 @@
-interface User {
+"use client"
+
+export interface User {
   id: string
   email: string
   role: string
 }
 
 export function login(email: string, password: string): User | null {
-  // Demo authentication - in production, this would validate against a real backend
-  const demoUsers = [
+  // Simple demo authentication
+  const validUsers = [
     { id: "1", email: "admin@ceiromao.com", role: "admin" },
     { id: "2", email: "hr@ceiromao.com", role: "hr" },
     { id: "3", email: "teacher@ceiromao.com", role: "teacher" },
   ]
 
-  const user = demoUsers.find((u) => u.email === email)
+  const user = validUsers.find((u) => u.email === email)
   if (user) {
     localStorage.setItem("user", JSON.stringify(user))
     return user
