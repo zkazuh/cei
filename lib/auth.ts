@@ -1,55 +1,83 @@
 import { supabase } from "./supabase"
-import type { User } from "./supabase"
 
-export async function signIn(email: string, password: string): Promise<User | null> {
+export interface LoginCredentials {
+  email: string
+  password: string
+}
+
+export interface AuthUser {
+  id: string
+  email: string
+  name: string
+  role: "admin" | "user"
+}
+
+export async function login(credentials: LoginCredentials): Promise<{
+  success: boolean
+  user?: AuthUser
+  message: string
+}> {
   try {
-    // In a real app, you would hash the password and compare
-    // For demo purposes, we'll use simple password matching
-    const { data, error } = await supabase.from("users").select("*").eq("email", email).single()
+    const { data, error } = await supabase.from("users").select("*").eq("email", credentials.email).single()
 
     if (error || !data) {
-      console.error("User not found:", error)
-      return null
+      return {
+        success: false,
+        message: "Invalid email or password",
+      }
     }
 
-    // Simple password check (in production, use proper hashing)
-    const validPasswords: Record<string, string> = {
-      "admin@ceiromao.com": "admin123",
-      "employee@ceiromao.com": "emp123",
-      "maria@ceiromao.com": "maria123",
-      "carlos@ceiromao.com": "carlos123",
-      "ana@ceiromao.com": "ana123",
+    // In a real app, you would hash and compare passwords
+    // For demo purposes, we'll accept any password for existing users
+    const isValidPassword = true // bcrypt.compare(credentials.password, data.password_hash)
+
+    if (!isValidPassword) {
+      return {
+        success: false,
+        message: "Invalid email or password",
+      }
     }
 
-    if (validPasswords[email] !== password) {
-      console.error("Invalid password")
-      return null
+    return {
+      success: true,
+      user: {
+        id: data.id,
+        email: data.email,
+        name: data.name,
+        role: data.role,
+      },
+      message: "Login successful",
     }
-
-    return data
   } catch (error) {
-    console.error("Error in signIn:", error)
-    return null
+    console.error("Login error:", error)
+    return {
+      success: false,
+      message: "Login failed. Please try again.",
+    }
   }
 }
 
-export async function signOut(): Promise<void> {
-  // Clear any stored session data
+export async function logout(): Promise<void> {
+  // In a real app, you would clear server-side sessions
+  // For now, we'll just clear client-side storage
   if (typeof window !== "undefined") {
-    localStorage.removeItem("user")
+    localStorage.removeItem("auth-user")
   }
 }
 
-export async function getCurrentUser(): Promise<User | null> {
+export function getCurrentUser(): AuthUser | null {
+  if (typeof window === "undefined") return null
+
   try {
-    if (typeof window === "undefined") return null
-
-    const userData = localStorage.getItem("user")
-    if (!userData) return null
-
-    return JSON.parse(userData)
-  } catch (error) {
-    console.error("Error getting current user:", error)
+    const stored = localStorage.getItem("auth-user")
+    return stored ? JSON.parse(stored) : null
+  } catch {
     return null
+  }
+}
+
+export function setCurrentUser(user: AuthUser): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("auth-user", JSON.stringify(user))
   }
 }

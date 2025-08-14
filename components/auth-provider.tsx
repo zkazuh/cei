@@ -3,46 +3,44 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import { getCurrentUser } from "@/lib/auth"
-import type { User } from "@/lib/supabase"
+import { getCurrentUser, setCurrentUser, logout as authLogout } from "@/lib/auth"
+import type { AuthUser } from "@/lib/auth"
 
 interface AuthContextType {
-  user: User | null
-  loading: boolean
-  setUser: (user: User | null) => void
+  user: AuthUser | null
+  login: (user: AuthUser) => void
+  logout: () => void
+  isLoading: boolean
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  setUser: () => {},
-})
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const currentUser = await getCurrentUser()
-        setUser(currentUser)
-      } catch (error) {
-        console.error("Error loading user:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadUser()
+    const currentUser = getCurrentUser()
+    setUser(currentUser)
+    setIsLoading(false)
   }, [])
 
-  return <AuthContext.Provider value={{ user, loading, setUser }}>{children}</AuthContext.Provider>
+  const login = (user: AuthUser) => {
+    setUser(user)
+    setCurrentUser(user)
+  }
+
+  const logout = async () => {
+    setUser(null)
+    await authLogout()
+  }
+
+  return <AuthContext.Provider value={{ user, login, logout, isLoading }}>{children}</AuthContext.Provider>
 }
 
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext)
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider")
   }
   return context

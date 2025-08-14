@@ -5,23 +5,23 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
 
 export default function HomePage() {
-  const { user, loading } = useAuth()
+  const { user, isLoading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading) {
+    if (!isLoading) {
       if (user) {
         router.push("/ceiromao")
       } else {
         router.push("/login")
       }
     }
-  }, [user, loading, router])
+  }, [user, isLoading, router])
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <div className="text-lg">Loading...</div>
       </div>
     )
   }

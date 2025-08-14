@@ -1,22 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { getEmployeeStats } from "@/lib/employee-management"
-import { getFileStats } from "@/lib/teacher-files"
-import {
-  Users,
-  UserCheck,
-  UserX,
-  GraduationCap,
-  FileText,
-  CheckCircle,
-  Clock,
-  AlertCircle,
-  TrendingUp,
-} from "lucide-react"
+import { getTeacherFileStats } from "@/lib/teacher-files"
+import { useAuth } from "@/components/auth-provider"
+import { Users, UserCheck, UserX, FileText, CheckCircle, Calendar, AlertCircle, GraduationCap } from "lucide-react"
 
 export default function DashboardPage() {
+  const { user } = useAuth()
   const [employeeStats, setEmployeeStats] = useState({
     total: 0,
     active: 0,
@@ -25,25 +18,26 @@ export default function DashboardPage() {
     byDepartment: {} as Record<string, number>,
   })
   const [fileStats, setFileStats] = useState({
-    total: 0,
-    pending: 0,
+    totalRequirements: 0,
     submitted: 0,
+    pending: 0,
     overdue: 0,
+    byMonth: {} as Record<string, { submitted: number; pending: number; overdue: number }>,
   })
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    loadData()
+    loadStats()
   }, [])
 
-  const loadData = async () => {
+  const loadStats = async () => {
     setIsLoading(true)
     try {
-      const [empStats, fStats] = await Promise.all([getEmployeeStats(), getFileStats()])
+      const [empStats, teacherStats] = await Promise.all([getEmployeeStats(), getTeacherFileStats()])
       setEmployeeStats(empStats)
-      setFileStats(fStats)
+      setFileStats(teacherStats)
     } catch (error) {
-      console.error("Error loading dashboard data:", error)
+      console.error("Error loading dashboard stats:", error)
     } finally {
       setIsLoading(false)
     }
@@ -51,8 +45,11 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Loading dashboard data...</p>
+        </div>
       </div>
     )
   }
@@ -61,16 +58,13 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your HR system</p>
+        <p className="text-muted-foreground">Welcome back, {user?.name}! Here's an overview of your HR system.</p>
       </div>
 
       {/* Employee Stats */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          Employee Overview
-        </h2>
-        <div className="grid gap-4 md:grid-cols-4">
+        <h2 className="text-xl font-semibold mb-4">Employee Overview</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
@@ -78,63 +72,56 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{employeeStats.total}</div>
-              <p className="text-xs text-muted-foreground">All employees</p>
+              <p className="text-xs text-muted-foreground">All registered employees</p>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active</CardTitle>
+              <CardTitle className="text-sm font-medium">Active Employees</CardTitle>
               <UserCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{employeeStats.active}</div>
-              <p className="text-xs text-muted-foreground">Currently working</p>
+              <p className="text-xs text-muted-foreground">Currently active</p>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Inactive</CardTitle>
+              <CardTitle className="text-sm font-medium">Inactive Employees</CardTitle>
               <UserX className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">{employeeStats.inactive}</div>
-              <p className="text-xs text-muted-foreground">Not currently working</p>
+              <p className="text-xs text-muted-foreground">Currently inactive</p>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Teachers</CardTitle>
               <GraduationCap className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-purple-600">{employeeStats.byCategory.teacher || 0}</div>
+              <div className="text-2xl font-bold">{employeeStats.byCategory.teacher || 0}</div>
               <p className="text-xs text-muted-foreground">Teaching staff</p>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* File Stats */}
+      {/* Teacher Files Stats */}
       <div>
-        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          Teacher Files Overview
-        </h2>
-        <div className="grid gap-4 md:grid-cols-4">
+        <h2 className="text-xl font-semibold mb-4">Teacher Files Overview</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Requirements</CardTitle>
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{fileStats.total}</div>
-              <p className="text-xs text-muted-foreground">All file requirements</p>
+              <div className="text-2xl font-bold">{fileStats.totalRequirements}</div>
+              <p className="text-xs text-muted-foreground">This year</p>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Submitted</CardTitle>
@@ -142,21 +129,23 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">{fileStats.submitted}</div>
-              <p className="text-xs text-muted-foreground">Files submitted</p>
+              <p className="text-xs text-muted-foreground">
+                {fileStats.totalRequirements > 0
+                  ? `${Math.round((fileStats.submitted / fileStats.totalRequirements) * 100)}% completion`
+                  : "No requirements"}
+              </p>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Pending</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600">{fileStats.pending}</div>
               <p className="text-xs text-muted-foreground">Awaiting submission</p>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Overdue</CardTitle>
@@ -171,28 +160,46 @@ export default function DashboardPage() {
       </div>
 
       {/* Department Breakdown */}
-      {Object.keys(employeeStats.byDepartment).length > 0 && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            Department Breakdown
-          </h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            {Object.entries(employeeStats.byDepartment).map(([department, count]) => (
-              <Card key={department}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{department}</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{count}</div>
-                  <p className="text-xs text-muted-foreground">employees</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Department Breakdown</h2>
+        <Card>
+          <CardHeader>
+            <CardTitle>Employees by Department</CardTitle>
+            <CardDescription>Distribution of employees across departments</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {Object.entries(employeeStats.byDepartment).map(([department, count]) => (
+                <div key={department} className="flex items-center justify-between p-3 border rounded-lg">
+                  <span className="font-medium">{department}</span>
+                  <Badge variant="secondary">{count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Category Breakdown */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Employee Categories</h2>
+        <Card>
+          <CardHeader>
+            <CardTitle>Employees by Category</CardTitle>
+            <CardDescription>Distribution of employees by employment type</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-3">
+              {Object.entries(employeeStats.byCategory).map(([category, count]) => (
+                <div key={category} className="flex items-center justify-between p-3 border rounded-lg">
+                  <span className="font-medium capitalize">{category}</span>
+                  <Badge variant="outline">{count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
