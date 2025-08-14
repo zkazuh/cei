@@ -94,6 +94,53 @@ export async function getAttendanceStats(date?: string): Promise<AttendanceStats
   }
 }
 
+// Dashboard-specific function for attendance stats
+export async function getAttendanceStatsForDate(date: string): Promise<{
+  totalEmployees: number
+  presentCount: number
+  absentCount: number
+  lateCount: number
+  attendanceRate: number
+}> {
+  try {
+    const [attendanceResult, employeesResult] = await Promise.all([
+      supabase.from("attendance").select("status").eq("date", date),
+      supabase.from("employees").select("id").eq("status", "active"),
+    ])
+
+    const attendance = attendanceResult.data || []
+    const totalEmployees = employeesResult.data?.length || 0
+
+    const stats = {
+      totalEmployees,
+      presentCount: 0,
+      absentCount: 0,
+      lateCount: 0,
+      attendanceRate: 0,
+    }
+
+    attendance.forEach((record) => {
+      if (record.status === "present") stats.presentCount++
+      else if (record.status === "absent") stats.absentCount++
+      else if (record.status === "late") stats.lateCount++
+    })
+
+    stats.attendanceRate =
+      totalEmployees > 0 ? Math.round(((stats.presentCount + stats.lateCount) / totalEmployees) * 100) : 0
+
+    return stats
+  } catch (error) {
+    console.error("Error in getAttendanceStatsForDate:", error)
+    return {
+      totalEmployees: 0,
+      presentCount: 0,
+      absentCount: 0,
+      lateCount: 0,
+      attendanceRate: 0,
+    }
+  }
+}
+
 export async function updateAttendanceStatus(
   attendanceId: string,
   status: "present" | "absent" | "late" | "excused",
@@ -245,6 +292,48 @@ export async function bulkUpdateAttendance(
     return true
   } catch (error) {
     console.error("Error in bulkUpdateAttendance:", error)
+    return false
+  }
+}
+
+// Legacy function for backward compatibility
+export async function getAttendanceForDate(date: string): Promise<AttendanceRecord[]> {
+  return getAttendanceRecords(date)
+}
+
+// Legacy function for backward compatibility
+export async function addAttendanceJustification(
+  attendanceId: string,
+  justificationType: string,
+  justificationText: string,
+  createdBy: string,
+): Promise<boolean> {
+  try {
+    // Validate UUID format for createdBy, use default admin UUID if invalid
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    const validCreatedBy = uuidRegex.test(createdBy) ? createdBy : "550e8400-e29b-41d4-a716-446655440000"
+
+    const { error } = await supabase.from("attendance_justifications").upsert(
+      {
+        attendance_id: attendanceId,
+        justification_type: justificationType,
+        justification_text: justificationText,
+        created_by: validCreatedBy,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "attendance_id",
+      },
+    )
+
+    if (error) {
+      console.error("Error adding justification:", error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in addAttendanceJustification:", error)
     return false
   }
 }
