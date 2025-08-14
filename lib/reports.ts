@@ -15,16 +15,231 @@ export interface AttendanceReport {
   attendance_rate: number
 }
 
-export interface PeriodReport {
-  period: string
-  total_employees: number
-  total_days: number
-  present_days: number
-  absent_days: number
-  late_days: number
-  excused_days: number
-  overall_attendance_rate: number
-  employees: AttendanceReport[]
+export interface ReportPeriod {
+  year: number
+  monthIndex: number
+  label: string
+  startDate: string
+  endDate: string
+}
+
+export interface AttendanceReportData {
+  employee: {
+    id: string
+    name: string
+    employee_number: string
+    department: string
+    position: string
+    category: string
+  }
+  attendance: {
+    [date: string]: {
+      morning?: string
+      afternoon?: string
+      merged?: string
+    }
+  }
+}
+
+export interface MonthlyAttendanceReport {
+  period: ReportPeriod
+  employees: AttendanceReportData[]
+  summary: {
+    totalEmployees: number
+    totalDays: number
+    averageAttendanceRate: number
+  }
+}
+
+export function generateReportPeriods(year: number): ReportPeriod[] {
+  const periods: ReportPeriod[] = []
+
+  for (let month = 0; month < 12; month++) {
+    const startDate = new Date(year, month, 1)
+    const endDate = new Date(year, month + 1, 0) // Last day of month
+
+    periods.push({
+      year,
+      monthIndex: month,
+      label: startDate.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+      startDate: startDate.toISOString().split("T")[0],
+      endDate: endDate.toISOString().split("T")[0],
+    })
+  }
+
+  return periods
+}
+
+export function getCurrentReportPeriod(): ReportPeriod {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+
+  const periods = generateReportPeriods(year)
+  return periods[month]
+}
+
+export function getAvailableYears(): number[] {
+  const currentYear = new Date().getFullYear()
+  const years = []
+
+  // Generate years from 2020 to current year + 1
+  for (let year = 2020; year <= currentYear + 1; year++) {
+    years.push(year)
+  }
+
+  return years
+}
+
+export function formatReportDate(dateString: string): string {
+  const date = new Date(dateString)
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })
+}
+
+export function getReportPeriodTitle(period: ReportPeriod): string {
+  return period.label
+}
+
+export async function getMonthlyAttendanceReport(period: ReportPeriod): Promise<MonthlyAttendanceReport> {
+  try {
+    // Get all employees (teachers and regular employees, exclude outsourced)
+    const { data: employees, error: empError } = await supabase
+      .from("employees")
+      .select("id, name, employee_number, department, position, category")
+      .in("category", ["regular", "teacher"])
+      .eq("status", "active")
+      .order("name")
+
+    if (empError) {
+      console.error("Error fetching employees:", empError)
+      return {
+        period,
+        employees: [],
+        summary: { totalEmployees: 0, totalDays: 0, averageAttendanceRate: 0 },
+      }
+    }
+
+    if (!employees || employees.length === 0) {
+      return {
+        period,
+        employees: [],
+        summary: { totalEmployees: 0, totalDays: 0, averageAttendanceRate: 0 },
+      }
+    }
+
+    // Get attendance data for the period
+    const { data: attendance, error: attError } = await supabase
+      .from("attendance")
+      .select("employee_id, date, status, period")
+      .gte("date", period.startDate)
+      .lte("date", period.endDate)
+      .in(
+        "employee_id",
+        employees.map((emp) => emp.id),
+      )
+
+    if (attError) {
+      console.error("Error fetching attendance:", attError)
+    }
+
+    // Process attendance data
+    const employeeReports: AttendanceReportData[] = employees.map((employee) => {
+      const employeeAttendance: { [date: string]: { morning?: string; afternoon?: string; merged?: string } } = {}
+
+      // Get attendance records for this employee
+      const empAttendance = attendance?.filter((att) => att.employee_id === employee.id) || []
+
+      // Group by date and period
+      empAttendance.forEach((att) => {
+        if (!employeeAttendance[att.date]) {
+          employeeAttendance[att.date] = {}
+        }
+
+        // Convert status to attendance code
+        let code = "F" // Default to absent
+        switch (att.status) {
+          case "present":
+            code = "C"
+            break
+          case "absent":
+            code = "F"
+            break
+          case "late":
+            code = "C" // Late is still considered present
+            break
+          case "sick":
+            code = "A"
+            break
+          case "vacation":
+            code = "AF"
+            break
+          case "half_day":
+            code = "C"
+            break
+          default:
+            code = "F"
+        }
+
+        if (att.period === "morning") {
+          employeeAttendance[att.date].morning = code
+        } else if (att.period === "afternoon") {
+          employeeAttendance[att.date].afternoon = code
+        } else {
+          // If no period specified, treat as full day
+          employeeAttendance[att.date].merged = code
+        }
+      })
+
+      // Merge morning and afternoon periods where both exist
+      Object.keys(employeeAttendance).forEach((date) => {
+        const dayAttendance = employeeAttendance[date]
+        if (dayAttendance.morning && dayAttendance.afternoon) {
+          if (dayAttendance.morning === dayAttendance.afternoon) {
+            dayAttendance.merged = dayAttendance.morning
+            delete dayAttendance.morning
+            delete dayAttendance.afternoon
+          }
+        }
+      })
+
+      return {
+        employee: {
+          id: employee.id,
+          name: employee.name,
+          employee_number: employee.employee_number,
+          department: employee.department,
+          position: employee.position,
+          category: employee.category,
+        },
+        attendance: employeeAttendance,
+      }
+    })
+
+    // Calculate summary statistics
+    const totalDays =
+      Math.ceil((new Date(period.endDate).getTime() - new Date(period.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+    const totalEmployees = employees.length
+
+    return {
+      period,
+      employees: employeeReports,
+      summary: {
+        totalEmployees,
+        totalDays,
+        averageAttendanceRate: 0, // Could calculate this based on attendance data
+      },
+    }
+  } catch (error) {
+    console.error("Error in getMonthlyAttendanceReport:", error)
+    return {
+      period,
+      employees: [],
+      summary: { totalEmployees: 0, totalDays: 0, averageAttendanceRate: 0 },
+    }
+  }
 }
 
 export async function getAttendanceReport(
@@ -120,45 +335,6 @@ export async function getAttendanceReport(
   }
 }
 
-export async function getPeriodReport(startDate: string, endDate: string): Promise<PeriodReport> {
-  try {
-    const reports = await getAttendanceReport(startDate, endDate)
-
-    const totalEmployees = reports.length
-    const totalDays = reports.reduce((sum, r) => sum + r.total_days, 0)
-    const presentDays = reports.reduce((sum, r) => sum + r.present_days, 0)
-    const absentDays = reports.reduce((sum, r) => sum + r.absent_days, 0)
-    const lateDays = reports.reduce((sum, r) => sum + r.late_days, 0)
-    const excusedDays = reports.reduce((sum, r) => sum + r.excused_days, 0)
-    const overallAttendanceRate = totalDays > 0 ? ((presentDays + lateDays) / totalDays) * 100 : 0
-
-    return {
-      period: `${startDate} to ${endDate}`,
-      total_employees: totalEmployees,
-      total_days: totalDays,
-      present_days: presentDays,
-      absent_days: absentDays,
-      late_days: lateDays,
-      excused_days: excusedDays,
-      overall_attendance_rate: Math.round(overallAttendanceRate * 100) / 100,
-      employees: reports,
-    }
-  } catch (error) {
-    console.error("Error in getPeriodReport:", error)
-    return {
-      period: `${startDate} to ${endDate}`,
-      total_employees: 0,
-      total_days: 0,
-      present_days: 0,
-      absent_days: 0,
-      late_days: 0,
-      excused_days: 0,
-      overall_attendance_rate: 0,
-      employees: [],
-    }
-  }
-}
-
 export async function exportAttendanceReport(
   startDate: string,
   endDate: string,
@@ -205,68 +381,5 @@ export async function exportAttendanceReport(
   } catch (error) {
     console.error("Error in exportAttendanceReport:", error)
     return ""
-  }
-}
-
-export async function getAttendanceTrends(
-  employeeId: string,
-  months = 6,
-): Promise<
-  Array<{
-    month: string
-    attendance_rate: number
-    total_days: number
-    present_days: number
-  }>
-> {
-  try {
-    const endDate = new Date()
-    const startDate = new Date()
-    startDate.setMonth(startDate.getMonth() - months)
-
-    const { data, error } = await supabase
-      .from("attendance")
-      .select("date, status")
-      .eq("employee_id", employeeId)
-      .gte("date", startDate.toISOString().split("T")[0])
-      .lte("date", endDate.toISOString().split("T")[0])
-      .order("date", { ascending: true })
-
-    if (error) {
-      console.error("Error fetching attendance trends:", error)
-      return []
-    }
-
-    if (!data || data.length === 0) {
-      return []
-    }
-
-    // Group by month
-    const monthlyData = new Map<string, { present: number; total: number }>()
-
-    data.forEach((record) => {
-      const month = record.date.substring(0, 7) // YYYY-MM format
-      if (!monthlyData.has(month)) {
-        monthlyData.set(month, { present: 0, total: 0 })
-      }
-      const monthData = monthlyData.get(month)!
-      monthData.total++
-      if (record.status === "present" || record.status === "late") {
-        monthData.present++
-      }
-    })
-
-    // Convert to array and calculate rates
-    const trends = Array.from(monthlyData.entries()).map(([month, data]) => ({
-      month,
-      attendance_rate: data.total > 0 ? Math.round((data.present / data.total) * 10000) / 100 : 0,
-      total_days: data.total,
-      present_days: data.present,
-    }))
-
-    return trends.sort((a, b) => a.month.localeCompare(b.month))
-  } catch (error) {
-    console.error("Error in getAttendanceTrends:", error)
-    return []
   }
 }

@@ -3,46 +3,63 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
+import { Button } from "@/components/ui/button"
 import { getEmployeeStats } from "@/lib/employee-management"
 import { getAttendanceStatsForDate } from "@/lib/attendance"
-import { getFileStats } from "@/lib/teacher-files"
-import {
-  Users,
-  UserCheck,
-  UserX,
-  FileText,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  TrendingUp,
-  Building,
-  Briefcase,
-} from "lucide-react"
-import type { EmployeeStats } from "@/lib/employee-management"
-import type { AttendanceStats } from "@/lib/attendance"
-import type { FileStats } from "@/lib/teacher-files"
+import { getTeacherFileStats } from "@/lib/teacher-files"
+import { Users, Clock, FileText, TrendingUp, Calendar, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
+
+interface DashboardStats {
+  employees: {
+    total: number
+    active: number
+    inactive: number
+    byDepartment: { [key: string]: number }
+    byCategory: { [key: string]: number }
+  }
+  attendance: {
+    totalEmployees: number
+    presentCount: number
+    absentCount: number
+    lateCount: number
+    attendanceRate: number
+  }
+  files: {
+    totalFiles: number
+    pendingFiles: number
+    submittedFiles: number
+    approvedFiles: number
+    rejectedFiles: number
+    totalRequirements: number
+    completedRequirements: number
+  }
+}
 
 export default function DashboardPage() {
-  const [employeeStats, setEmployeeStats] = useState<EmployeeStats>({
-    total: 0,
-    active: 0,
-    inactive: 0,
-    byDepartment: {},
-    byPosition: {},
-    byCategory: {},
-  })
-  const [attendanceStats, setAttendanceStats] = useState<AttendanceStats>({
-    totalEmployees: 0,
-    presentToday: 0,
-    absentToday: 0,
-    attendanceRate: 0,
-  })
-  const [fileStats, setFileStats] = useState<FileStats>({
-    total: 0,
-    pending: 0,
-    submitted: 0,
-    overdue: 0,
+  const [stats, setStats] = useState<DashboardStats>({
+    employees: {
+      total: 0,
+      active: 0,
+      inactive: 0,
+      byDepartment: {},
+      byCategory: {},
+    },
+    attendance: {
+      totalEmployees: 0,
+      presentCount: 0,
+      absentCount: 0,
+      lateCount: 0,
+      attendanceRate: 0,
+    },
+    files: {
+      totalFiles: 0,
+      pendingFiles: 0,
+      submittedFiles: 0,
+      approvedFiles: 0,
+      rejectedFiles: 0,
+      totalRequirements: 0,
+      completedRequirements: 0,
+    },
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -51,45 +68,79 @@ export default function DashboardPage() {
     loadDashboardData()
   }, [])
 
-  async function loadDashboardData() {
+  const loadDashboardData = async () => {
     try {
       setLoading(true)
       setError(null)
 
       const today = new Date().toISOString().split("T")[0]
 
-      // Use Promise.allSettled to handle partial failures gracefully
-      const results = await Promise.allSettled([getEmployeeStats(), getAttendanceStatsForDate(today), getFileStats()])
+      // Use Promise.allSettled to handle individual failures gracefully
+      const results = await Promise.allSettled([
+        getEmployeeStats(),
+        getAttendanceStatsForDate(today),
+        getTeacherFileStats(),
+      ])
 
-      // Handle employee stats
-      if (results[0].status === "fulfilled") {
-        setEmployeeStats(results[0].value)
-      } else {
-        console.error("Failed to load employee stats:", results[0].reason)
-      }
+      // Process employee stats
+      const employeeStats =
+        results[0].status === "fulfilled"
+          ? results[0].value
+          : {
+              totalEmployees: 0,
+              activeEmployees: 0,
+              inactiveEmployees: 0,
+              byDepartment: {},
+              byCategory: {},
+            }
 
-      // Handle attendance stats
-      if (results[1].status === "fulfilled") {
-        setAttendanceStats(results[1].value)
-      } else {
-        console.error("Failed to load attendance stats:", results[1].reason)
-      }
+      // Process attendance stats
+      const attendanceStats =
+        results[1].status === "fulfilled"
+          ? results[1].value
+          : {
+              totalEmployees: 0,
+              presentCount: 0,
+              absentCount: 0,
+              lateCount: 0,
+              attendanceRate: 0,
+            }
 
-      // Handle file stats
-      if (results[2].status === "fulfilled") {
-        setFileStats(results[2].value)
-      } else {
-        console.error("Failed to load file stats:", results[2].reason)
-      }
+      // Process file stats
+      const fileStats =
+        results[2].status === "fulfilled"
+          ? results[2].value
+          : {
+              totalFiles: 0,
+              pendingFiles: 0,
+              submittedFiles: 0,
+              approvedFiles: 0,
+              rejectedFiles: 0,
+              totalRequirements: 0,
+              completedRequirements: 0,
+            }
 
-      // Check if all requests failed
-      const allFailed = results.every((result) => result.status === "rejected")
-      if (allFailed) {
-        setError("Failed to load dashboard data. Please check your connection and try again.")
+      setStats({
+        employees: {
+          total: employeeStats.totalEmployees,
+          active: employeeStats.activeEmployees,
+          inactive: employeeStats.inactiveEmployees,
+          byDepartment: employeeStats.byDepartment,
+          byCategory: employeeStats.byCategory,
+        },
+        attendance: attendanceStats,
+        files: fileStats,
+      })
+
+      // Check for any failures and set error message
+      const failures = results.filter((result) => result.status === "rejected")
+      if (failures.length > 0) {
+        console.warn("Some dashboard data failed to load:", failures)
+        setError(`Some data may be incomplete. ${failures.length} service(s) unavailable.`)
       }
     } catch (error) {
       console.error("Error loading dashboard data:", error)
-      setError("An unexpected error occurred while loading the dashboard.")
+      setError("Failed to load dashboard data. Please try refreshing the page.")
     } finally {
       setLoading(false)
     }
@@ -103,25 +154,29 @@ export default function DashboardPage() {
     )
   }
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <div className="text-lg text-red-600">{error}</div>
-        <button onClick={loadDashboardData} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-          Retry
-        </button>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Overview of your HR portal</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600">Overview of HR portal statistics and metrics</p>
+        </div>
+        <Button onClick={loadDashboardData} variant="outline">
+          <TrendingUp className="h-4 w-4 mr-2" />
+          Refresh Data
+        </Button>
       </div>
 
-      {/* Employee Overview */}
+      {error && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2" />
+            <p className="text-yellow-800">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Employee Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -129,9 +184,9 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{employeeStats.total}</div>
+            <div className="text-2xl font-bold">{stats.employees.total}</div>
             <p className="text-xs text-muted-foreground">
-              {employeeStats.active} active, {employeeStats.inactive} inactive
+              {stats.employees.active} active, {stats.employees.inactive} inactive
             </p>
           </CardContent>
         </Card>
@@ -139,12 +194,12 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Present Today</CardTitle>
-            <UserCheck className="h-4 w-4 text-green-500" />
+            <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{attendanceStats.presentToday}</div>
+            <div className="text-2xl font-bold text-green-600">{stats.attendance.presentCount}</div>
             <p className="text-xs text-muted-foreground">
-              {attendanceStats.attendanceRate.toFixed(1)}% attendance rate
+              {stats.attendance.attendanceRate.toFixed(1)}% attendance rate
             </p>
           </CardContent>
         </Card>
@@ -152,127 +207,126 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Absent Today</CardTitle>
-            <UserX className="h-4 w-4 text-red-500" />
+            <XCircle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{attendanceStats.absentToday}</div>
-            <p className="text-xs text-muted-foreground">Out of {attendanceStats.totalEmployees} total employees</p>
+            <div className="text-2xl font-bold text-red-600">{stats.attendance.absentCount}</div>
+            <p className="text-xs text-muted-foreground">{stats.attendance.lateCount} late arrivals</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Attendance Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium">Teacher Files</CardTitle>
+            <FileText className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{attendanceStats.attendanceRate.toFixed(1)}%</div>
-            <Progress value={attendanceStats.attendanceRate} className="mt-2" />
+            <div className="text-2xl font-bold">{stats.files.totalFiles}</div>
+            <p className="text-xs text-muted-foreground">{stats.files.pendingFiles} pending review</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Teacher Files Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Files</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{fileStats.total}</div>
-            <p className="text-xs text-muted-foreground">All file requirements</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Files</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{fileStats.pending}</div>
-            <p className="text-xs text-muted-foreground">Awaiting submission</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Submitted Files</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{fileStats.submitted}</div>
-            <p className="text-xs text-muted-foreground">Completed submissions</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue Files</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{fileStats.overdue}</div>
-            <p className="text-xs text-muted-foreground">Past due date</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Department and Category Breakdown */}
+      {/* Department Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Building className="h-5 w-5" />
+              <Users className="h-5 w-5" />
               Employees by Department
             </CardTitle>
             <CardDescription>Distribution of employees across departments</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {Object.entries(employeeStats.byDepartment).length > 0 ? (
-                Object.entries(employeeStats.byDepartment)
-                  .sort(([, a], [, b]) => b - a)
-                  .map(([department, count]) => (
-                    <div key={department} className="flex items-center justify-between">
-                      <span className="text-sm font-medium capitalize">{department}</span>
-                      <Badge variant="secondary">{count}</Badge>
-                    </div>
-                  ))
-              ) : (
-                <p className="text-sm text-gray-500">No department data available</p>
-              )}
-            </div>
+            {Object.keys(stats.employees.byDepartment).length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No department data available</p>
+            ) : (
+              <div className="space-y-3">
+                {Object.entries(stats.employees.byDepartment).map(([department, count]) => (
+                  <div key={department} className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{department}</span>
+                    <Badge variant="secondary">{count}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Briefcase className="h-5 w-5" />
-              Employees by Category
+              <Calendar className="h-5 w-5" />
+              Employee Categories
             </CardTitle>
-            <CardDescription>Distribution of employees by category</CardDescription>
+            <CardDescription>Breakdown by employee type</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {Object.entries(employeeStats.byCategory).length > 0 ? (
-                Object.entries(employeeStats.byCategory)
-                  .sort(([, a], [, b]) => b - a)
-                  .map(([category, count]) => (
-                    <div key={category} className="flex items-center justify-between">
-                      <span className="text-sm font-medium capitalize">{category}</span>
-                      <Badge variant="secondary">{count}</Badge>
-                    </div>
-                  ))
-              ) : (
-                <p className="text-sm text-gray-500">No category data available</p>
-              )}
-            </div>
+            {Object.keys(stats.employees.byCategory).length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No category data available</p>
+            ) : (
+              <div className="space-y-3">
+                {Object.entries(stats.employees.byCategory).map(([category, count]) => (
+                  <div key={category} className="flex items-center justify-between">
+                    <span className="text-sm font-medium capitalize">{category}</span>
+                    <Badge variant="outline">{count}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* File Status Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Teacher Files Overview
+          </CardTitle>
+          <CardDescription>Status of teacher file submissions and requirements</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{stats.files.submittedFiles}</div>
+              <p className="text-sm text-gray-600">Submitted</p>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{stats.files.approvedFiles}</div>
+              <p className="text-sm text-gray-600">Approved</p>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-yellow-600">{stats.files.pendingFiles}</div>
+              <p className="text-sm text-gray-600">Pending</p>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-red-600">{stats.files.rejectedFiles}</div>
+              <p className="text-sm text-gray-600">Rejected</p>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Requirements Completion</span>
+              <span className="text-sm text-gray-600">
+                {stats.files.completedRequirements} of {stats.files.totalRequirements} completed
+              </span>
+            </div>
+            <div className="mt-2 bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full"
+                style={{
+                  width:
+                    stats.files.totalRequirements > 0
+                      ? `${(stats.files.completedRequirements / stats.files.totalRequirements) * 100}%`
+                      : "0%",
+                }}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Quick Actions */}
       <Card>
@@ -282,18 +336,18 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-              <h3 className="font-medium">Mark Attendance</h3>
-              <p className="text-sm text-gray-600">Record today's attendance</p>
-            </div>
-            <div className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-              <h3 className="font-medium">Add Employee</h3>
-              <p className="text-sm text-gray-600">Register a new employee</p>
-            </div>
-            <div className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-              <h3 className="font-medium">Generate Report</h3>
-              <p className="text-sm text-gray-600">Create attendance reports</p>
-            </div>
+            <Button variant="outline" className="h-auto p-4 flex flex-col items-center gap-2 bg-transparent">
+              <Users className="h-6 w-6" />
+              <span>Manage Employees</span>
+            </Button>
+            <Button variant="outline" className="h-auto p-4 flex flex-col items-center gap-2 bg-transparent">
+              <Clock className="h-6 w-6" />
+              <span>Mark Attendance</span>
+            </Button>
+            <Button variant="outline" className="h-auto p-4 flex flex-col items-center gap-2 bg-transparent">
+              <FileText className="h-6 w-6" />
+              <span>Review Files</span>
+            </Button>
           </div>
         </CardContent>
       </Card>

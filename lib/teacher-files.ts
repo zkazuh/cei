@@ -1,120 +1,207 @@
 import { supabase } from "./supabase"
-import type { ActivityFile, Employee } from "./supabase"
 
-export interface TeacherFileWithEmployee extends ActivityFile {
-  employees: Employee
-}
-
-export interface FileStats {
-  total: number
-  pending: number
-  submitted: number
-  overdue: number
+export interface TeacherFile {
+  id: string
+  teacher_id: string
+  file_name: string
+  file_type: string
+  file_size: number
+  file_url: string
+  requirement_id?: string
+  status: "pending" | "submitted" | "approved" | "rejected"
+  uploaded_at: string
+  updated_at: string
+  notes?: string
 }
 
 export interface FileRequirement {
-  employee_id: string
-  file_name: string
-  file_path?: string
-  file_size?: number
-  file_type?: string
-  requirement_type: string
-  month: number
-  year: number
-  due_date: string
-  status: "pending" | "submitted"
-  submitted_at?: string
+  id: string
+  name: string
+  description: string
+  required: boolean
+  due_date?: string
+  file_types: string[]
+  max_file_size: number
+  created_at: string
+  updated_at: string
 }
 
-export async function getTeacherFiles(): Promise<TeacherFileWithEmployee[]> {
+export interface TeacherFileStats {
+  totalFiles: number
+  pendingFiles: number
+  submittedFiles: number
+  approvedFiles: number
+  rejectedFiles: number
+  totalRequirements: number
+  completedRequirements: number
+}
+
+export async function getTeacherFiles(teacherId?: string): Promise<TeacherFile[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("activity_files")
       .select(`
-        *,
-        employees!inner (
+        id,
+        employee_id,
+        file_name,
+        file_type,
+        file_size,
+        file_url,
+        status,
+        uploaded_at,
+        updated_at,
+        notes,
+        employees (
           id,
           name,
           employee_number,
-          department,
-          position,
-          category
+          department
         )
       `)
-      .eq("employees.category", "teacher")
-      .order("created_at", { ascending: false })
+      .order("uploaded_at", { ascending: false })
+
+    if (teacherId) {
+      query = query.eq("employee_id", teacherId)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error("Error fetching teacher files:", error)
       return []
     }
 
-    return data || []
+    // Transform the data to match TeacherFile interface
+    return (data || []).map((file) => ({
+      id: file.id,
+      teacher_id: file.employee_id,
+      file_name: file.file_name,
+      file_type: file.file_type,
+      file_size: file.file_size || 0,
+      file_url: file.file_url || "",
+      status: file.status || "pending",
+      uploaded_at: file.uploaded_at,
+      updated_at: file.updated_at,
+      notes: file.notes,
+    }))
   } catch (error) {
     console.error("Error in getTeacherFiles:", error)
     return []
   }
 }
 
-export async function getFileStats(): Promise<FileStats> {
+export async function getFileRequirements(): Promise<FileRequirement[]> {
   try {
-    const { data, error } = await supabase
-      .from("activity_files")
-      .select(`
-        status,
-        due_date,
-        employees!inner (category)
-      `)
-      .eq("employees.category", "teacher")
+    // Since we don't have a file_requirements table, return some default requirements
+    const defaultRequirements: FileRequirement[] = [
+      {
+        id: "1",
+        name: "Teaching Certificate",
+        description: "Valid teaching certificate or license",
+        required: true,
+        file_types: ["pdf", "jpg", "png"],
+        max_file_size: 5 * 1024 * 1024, // 5MB
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: "2",
+        name: "Resume/CV",
+        description: "Current resume or curriculum vitae",
+        required: true,
+        file_types: ["pdf", "doc", "docx"],
+        max_file_size: 2 * 1024 * 1024, // 2MB
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: "3",
+        name: "ID Copy",
+        description: "Copy of government-issued identification",
+        required: true,
+        file_types: ["pdf", "jpg", "png"],
+        max_file_size: 3 * 1024 * 1024, // 3MB
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: "4",
+        name: "Background Check",
+        description: "Criminal background check certificate",
+        required: false,
+        file_types: ["pdf"],
+        max_file_size: 5 * 1024 * 1024, // 5MB
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ]
 
-    if (error) {
-      console.error("Error fetching file stats:", error)
-      return { total: 0, pending: 0, submitted: 0, overdue: 0 }
-    }
-
-    if (!data || data.length === 0) {
-      return { total: 0, pending: 0, submitted: 0, overdue: 0 }
-    }
-
-    const now = new Date()
-    const stats: FileStats = {
-      total: data.length,
-      pending: 0,
-      submitted: 0,
-      overdue: 0,
-    }
-
-    data.forEach((file) => {
-      if (file.status === "submitted") {
-        stats.submitted++
-      } else if (file.status === "pending") {
-        if (file.due_date && new Date(file.due_date) < now) {
-          stats.overdue++
-        } else {
-          stats.pending++
-        }
-      }
-    })
-
-    return stats
+    return defaultRequirements
   } catch (error) {
-    console.error("Error in getFileStats:", error)
-    return { total: 0, pending: 0, submitted: 0, overdue: 0 }
+    console.error("Error in getFileRequirements:", error)
+    return []
   }
 }
 
-export async function updateFileStatus(fileId: string, status: string): Promise<boolean> {
+export async function uploadFile(teacherId: string, file: File, requirementId?: string): Promise<TeacherFile | null> {
   try {
-    const updateData: any = {
-      status,
+    // In a real implementation, you would upload to a storage service
+    // For demo purposes, we'll create a mock file URL
+    const mockFileUrl = `/uploads/${Date.now()}_${file.name}`
+
+    const fileData = {
+      employee_id: teacherId,
+      file_name: file.name,
+      file_type: file.type,
+      file_size: file.size,
+      file_url: mockFileUrl,
+      status: "submitted",
+      uploaded_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      notes: requirementId ? `Uploaded for requirement ${requirementId}` : undefined,
     }
 
-    if (status === "submitted") {
-      updateData.submitted_at = new Date().toISOString()
+    const { data, error } = await supabase.from("activity_files").insert(fileData).select().single()
+
+    if (error) {
+      console.error("Error uploading file:", error)
+      return null
     }
 
-    const { error } = await supabase.from("activity_files").update(updateData).eq("id", fileId)
+    // Transform to TeacherFile format
+    return {
+      id: data.id,
+      teacher_id: data.employee_id,
+      file_name: data.file_name,
+      file_type: data.file_type,
+      file_size: data.file_size || 0,
+      file_url: data.file_url || "",
+      requirement_id: requirementId,
+      status: data.status || "pending",
+      uploaded_at: data.uploaded_at,
+      updated_at: data.updated_at,
+      notes: data.notes,
+    }
+  } catch (error) {
+    console.error("Error in uploadFile:", error)
+    return null
+  }
+}
+
+export async function updateFileStatus(
+  fileId: string,
+  status: "pending" | "submitted" | "approved" | "rejected",
+  notes?: string,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("activity_files")
+      .update({
+        status,
+        notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", fileId)
 
     if (error) {
       console.error("Error updating file status:", error)
@@ -125,125 +212,6 @@ export async function updateFileStatus(fileId: string, status: string): Promise<
   } catch (error) {
     console.error("Error in updateFileStatus:", error)
     return false
-  }
-}
-
-export async function uploadFile(
-  file: File,
-  employeeId: string,
-  requirementType: string,
-  month: number,
-  year: number,
-): Promise<string | null> {
-  try {
-    // For demo purposes, we'll simulate file upload
-    // In a real implementation, you would upload to Supabase Storage or another service
-    const fileName = `${employeeId}_${requirementType}_${month}_${year}_${file.name}`
-    const filePath = `teacher-files/${fileName}`
-
-    // Simulate upload delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Create file record in database
-    const dueDate = new Date(year, month, 10).toISOString().split("T")[0]
-
-    const { error } = await supabase.from("activity_files").insert({
-      employee_id: employeeId,
-      file_name: file.name,
-      file_path: filePath,
-      file_size: file.size,
-      file_type: file.type,
-      requirement_type: requirementType,
-      month: month,
-      year: year,
-      due_date: dueDate,
-      status: "submitted",
-      submitted_at: new Date().toISOString(),
-    })
-
-    if (error) {
-      console.error("Error creating file record:", error)
-      return null
-    }
-
-    // Return simulated file path
-    return filePath
-  } catch (error) {
-    console.error("Error uploading file:", error)
-    return null
-  }
-}
-
-export async function downloadFile(filePath: string): Promise<Blob | null> {
-  try {
-    // For demo purposes, we'll create a dummy file
-    // In a real implementation, you would download from Supabase Storage
-    const content = `This is a demo file for: ${filePath}\nGenerated at: ${new Date().toISOString()}`
-    const blob = new Blob([content], { type: "text/plain" })
-
-    return blob
-  } catch (error) {
-    console.error("Error downloading file:", error)
-    return null
-  }
-}
-
-export async function createFileRequirement(requirement: FileRequirement): Promise<boolean> {
-  try {
-    const { error } = await supabase.from("activity_files").insert({
-      employee_id: requirement.employee_id,
-      file_name: requirement.file_name,
-      file_path: requirement.file_path,
-      file_size: requirement.file_size,
-      file_type: requirement.file_type,
-      requirement_type: requirement.requirement_type,
-      month: requirement.month,
-      year: requirement.year,
-      due_date: requirement.due_date,
-      status: requirement.status,
-      submitted_at: requirement.submitted_at,
-    })
-
-    if (error) {
-      console.error("Error creating file requirement:", error)
-      return false
-    }
-
-    return true
-  } catch (error) {
-    console.error("Error in createFileRequirement:", error)
-    return false
-  }
-}
-
-export async function getTeacherFilesByEmployee(employeeId: string): Promise<TeacherFileWithEmployee[]> {
-  try {
-    const { data, error } = await supabase
-      .from("activity_files")
-      .select(`
-        *,
-        employees!inner (
-          id,
-          name,
-          employee_number,
-          department,
-          position,
-          category
-        )
-      `)
-      .eq("employee_id", employeeId)
-      .eq("employees.category", "teacher")
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Error fetching teacher files by employee:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error in getTeacherFilesByEmployee:", error)
-    return []
   }
 }
 
@@ -263,171 +231,131 @@ export async function deleteFile(fileId: string): Promise<boolean> {
   }
 }
 
-export async function bulkCreateFileRequirements(requirements: FileRequirement[]): Promise<boolean> {
+export async function getTeacherFileStats(teacherId?: string): Promise<TeacherFileStats> {
   try {
-    const { error } = await supabase.from("activity_files").insert(
-      requirements.map((req) => ({
-        employee_id: req.employee_id,
-        file_name: req.file_name,
-        file_path: req.file_path,
-        file_size: req.file_size,
-        file_type: req.file_type,
-        requirement_type: req.requirement_type,
-        month: req.month,
-        year: req.year,
-        due_date: req.due_date,
-        status: req.status,
-        submitted_at: req.submitted_at,
-      })),
-    )
+    let query = supabase.from("activity_files").select("status")
+
+    if (teacherId) {
+      query = query.eq("employee_id", teacherId)
+    }
+
+    const { data, error } = await query
 
     if (error) {
-      console.error("Error creating bulk file requirements:", error)
-      return false
-    }
-
-    return true
-  } catch (error) {
-    console.error("Error in bulkCreateFileRequirements:", error)
-    return false
-  }
-}
-
-export async function getFilesByStatus(status: string): Promise<TeacherFileWithEmployee[]> {
-  try {
-    const { data, error } = await supabase
-      .from("activity_files")
-      .select(`
-        *,
-        employees!inner (
-          id,
-          name,
-          employee_number,
-          department,
-          position,
-          category
-        )
-      `)
-      .eq("status", status)
-      .eq("employees.category", "teacher")
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Error fetching files by status:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error in getFilesByStatus:", error)
-    return []
-  }
-}
-
-export async function getOverdueFiles(): Promise<TeacherFileWithEmployee[]> {
-  try {
-    const now = new Date().toISOString().split("T")[0]
-
-    const { data, error } = await supabase
-      .from("activity_files")
-      .select(`
-        *,
-        employees!inner (
-          id,
-          name,
-          employee_number,
-          department,
-          position,
-          category
-        )
-      `)
-      .eq("status", "pending")
-      .eq("employees.category", "teacher")
-      .lt("due_date", now)
-      .order("due_date", { ascending: true })
-
-    if (error) {
-      console.error("Error fetching overdue files:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error in getOverdueFiles:", error)
-    return []
-  }
-}
-
-export async function updateFileMetadata(
-  fileId: string,
-  metadata: {
-    file_name?: string
-    requirement_type?: string
-    due_date?: string
-    month?: number
-    year?: number
-  },
-): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from("activity_files")
-      .update({
-        ...metadata,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", fileId)
-
-    if (error) {
-      console.error("Error updating file metadata:", error)
-      return false
-    }
-
-    return true
-  } catch (error) {
-    console.error("Error in updateFileMetadata:", error)
-    return false
-  }
-}
-
-export async function getFileStatsByEmployee(employeeId: string): Promise<FileStats> {
-  try {
-    const { data, error } = await supabase
-      .from("activity_files")
-      .select("status, due_date")
-      .eq("employee_id", employeeId)
-
-    if (error) {
-      console.error("Error fetching file stats by employee:", error)
-      return { total: 0, pending: 0, submitted: 0, overdue: 0 }
-    }
-
-    if (!data || data.length === 0) {
-      return { total: 0, pending: 0, submitted: 0, overdue: 0 }
-    }
-
-    const now = new Date()
-    const stats: FileStats = {
-      total: data.length,
-      pending: 0,
-      submitted: 0,
-      overdue: 0,
-    }
-
-    data.forEach((file) => {
-      if (file.status === "submitted") {
-        stats.submitted++
-      } else if (file.status === "pending") {
-        if (file.due_date && new Date(file.due_date) < now) {
-          stats.overdue++
-        } else {
-          stats.pending++
-        }
+      console.error("Error fetching teacher file stats:", error)
+      return {
+        totalFiles: 0,
+        pendingFiles: 0,
+        submittedFiles: 0,
+        approvedFiles: 0,
+        rejectedFiles: 0,
+        totalRequirements: 0,
+        completedRequirements: 0,
       }
-    })
+    }
 
-    return stats
+    const files = data || []
+    const requirements = await getFileRequirements()
+
+    return {
+      totalFiles: files.length,
+      pendingFiles: files.filter((f) => f.status === "pending").length,
+      submittedFiles: files.filter((f) => f.status === "submitted").length,
+      approvedFiles: files.filter((f) => f.status === "approved").length,
+      rejectedFiles: files.filter((f) => f.status === "rejected").length,
+      totalRequirements: requirements.length,
+      completedRequirements: requirements.filter((r) => r.required).length,
+    }
   } catch (error) {
-    console.error("Error in getFileStatsByEmployee:", error)
-    return { total: 0, pending: 0, submitted: 0, overdue: 0 }
+    console.error("Error in getTeacherFileStats:", error)
+    return {
+      totalFiles: 0,
+      pendingFiles: 0,
+      submittedFiles: 0,
+      approvedFiles: 0,
+      rejectedFiles: 0,
+      totalRequirements: 0,
+      completedRequirements: 0,
+    }
+  }
+}
+
+export async function downloadFile(fileId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("activity_files")
+      .select("file_url, file_name")
+      .eq("id", fileId)
+      .single()
+
+    if (error) {
+      console.error("Error getting file download URL:", error)
+      return null
+    }
+
+    // In a real implementation, you would return the actual file URL
+    // For demo purposes, return a mock URL
+    return data.file_url || `/downloads/${data.file_name}`
+  } catch (error) {
+    console.error("Error in downloadFile:", error)
+    return null
+  }
+}
+
+export async function createFileRequirement(
+  requirement: Omit<FileRequirement, "id" | "created_at" | "updated_at">,
+): Promise<FileRequirement | null> {
+  try {
+    // In a real implementation, you would save to a file_requirements table
+    // For demo purposes, return a mock requirement
+    const newRequirement: FileRequirement = {
+      id: Date.now().toString(),
+      ...requirement,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+
+    return newRequirement
+  } catch (error) {
+    console.error("Error in createFileRequirement:", error)
+    return null
+  }
+}
+
+export async function updateFileRequirement(
+  requirementId: string,
+  updates: Partial<Omit<FileRequirement, "id" | "created_at" | "updated_at">>,
+): Promise<FileRequirement | null> {
+  try {
+    // In a real implementation, you would update the file_requirements table
+    // For demo purposes, return a mock updated requirement
+    const requirements = await getFileRequirements()
+    const existing = requirements.find((r) => r.id === requirementId)
+
+    if (!existing) {
+      return null
+    }
+
+    const updated: FileRequirement = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }
+
+    return updated
+  } catch (error) {
+    console.error("Error in updateFileRequirement:", error)
+    return null
+  }
+}
+
+export async function deleteFileRequirement(requirementId: string): Promise<boolean> {
+  try {
+    // In a real implementation, you would delete from the file_requirements table
+    // For demo purposes, return true
+    return true
+  } catch (error) {
+    console.error("Error in deleteFileRequirement:", error)
+    return false
   }
 }
