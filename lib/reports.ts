@@ -1,251 +1,272 @@
 import { supabase } from "./supabase"
 
-export interface AttendanceReportData {
-  employee: {
-    id: string
-    name: string
-    employee_number: string
-    department: string
-    position: string
-  }
-  attendance: {
-    [date: string]: {
-      morning?: "C" | "F" | "A" | "AF" | "CR" | "RE" | "R"
-      afternoon?: "C" | "F" | "A" | "AF" | "CR" | "RE" | "R"
-      merged?: "C" | "F" | "A" | "AF" | "CR" | "RE" | "R"
-    }
-  }
+export interface AttendanceReport {
+  employee_id: string
+  employee_name: string
+  employee_number: string
+  department: string
+  position: string
+  category: string
+  total_days: number
+  present_days: number
+  absent_days: number
+  late_days: number
+  excused_days: number
+  attendance_rate: number
 }
 
-export interface ReportPeriod {
-  startDate: string
-  endDate: string
-  label: string
-  year: number
-  monthIndex: number
+export interface PeriodReport {
+  period: string
+  total_employees: number
+  total_days: number
+  present_days: number
+  absent_days: number
+  late_days: number
+  excused_days: number
+  overall_attendance_rate: number
+  employees: AttendanceReport[]
 }
 
-export function generateReportPeriods(year: number): ReportPeriod[] {
-  const periods: ReportPeriod[] = []
-
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ]
-
-  for (let month = 0; month < 12; month++) {
-    const startMonth = month
-    const endMonth = month + 1
-
-    const startYear = year
-    const endYear = endMonth > 11 ? year + 1 : year
-    const actualEndMonth = endMonth > 11 ? 0 : endMonth
-
-    const startDate = new Date(startYear, startMonth, 11)
-    const endDate = new Date(endYear, actualEndMonth, 10)
-
-    const startDateStr = startDate.toISOString().split("T")[0]
-    const endDateStr = endDate.toISOString().split("T")[0]
-
-    const label = `${monthNames[startMonth]}/${monthNames[actualEndMonth]}`
-
-    periods.push({
-      startDate: startDateStr,
-      endDate: endDateStr,
-      label,
-      year: startYear,
-      monthIndex: month,
-    })
-  }
-
-  return periods
-}
-
-export function getCurrentReportPeriod(): ReportPeriod {
-  const today = new Date()
-  const currentYear = today.getFullYear()
-  const currentMonth = today.getMonth()
-  const currentDay = today.getDate()
-
-  let periodMonth = currentMonth
-  let periodYear = currentYear
-
-  if (currentDay < 11) {
-    periodMonth = currentMonth - 1
-    if (periodMonth < 0) {
-      periodMonth = 11
-      periodYear = currentYear - 1
-    }
-  }
-
-  const periods = generateReportPeriods(periodYear)
-  return periods[periodMonth]
-}
-
-function getAttendanceCode(
-  status: "present" | "absent" | "late",
-  justificationType?: "medical" | "justified" | "banked_hours" | "other" | "course" | "recess" | "meeting",
-): "C" | "F" | "A" | "AF" | "CR" | "RE" | "R" {
-  if (status === "present" || status === "late") {
-    return "C" // Present (including late)
-  } else {
-    switch (justificationType) {
-      case "medical":
-        return "A"
-      case "justified":
-        return "AF"
-      case "course":
-        return "CR"
-      case "recess":
-        return "RE"
-      case "meeting":
-        return "R"
-      default:
-        return "F"
-    }
-  }
-}
-
-export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise<{
-  reportPeriod: ReportPeriod
-  employees: AttendanceReportData[]
-}> {
+export async function getAttendanceReport(
+  startDate: string,
+  endDate: string,
+  employeeIds?: string[],
+): Promise<AttendanceReport[]> {
   try {
-    const reportPeriod = period || getCurrentReportPeriod()
-
-    // Get all employees - Include both teachers and regular employees, exclude outsourced
-    const { data: employees, error: employeesError } = await supabase
-      .from("employees")
-      .select(`
-        id,
-        employee_number,
-        name,
-        department,
-        position
-      `)
-      .eq("status", "active")
-      .in("category", ["regular", "teacher"]) // Include both regular and teacher employees
-      .order("employee_number")
-
-    if (employeesError) {
-      console.error("Error fetching employees:", employeesError)
-      return { reportPeriod, employees: [] }
-    }
-
-    // Fetch attendance data
-    const { data: attendanceData, error: attendanceError } = await supabase
+    let query = supabase
       .from("attendance")
       .select(`
         employee_id,
-        date,
         status,
-        period,
-        attendance_justifications(justification_type)
+        employees!inner (
+          id,
+          name,
+          employee_number,
+          department,
+          position,
+          category
+        )
       `)
-      .gte("date", reportPeriod.startDate)
-      .lte("date", reportPeriod.endDate)
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .in("employees.category", ["regular", "teacher"]) // Only include regular and teacher employees
 
-    if (attendanceError) {
-      console.error("Error fetching attendance:", attendanceError)
-      return { reportPeriod, employees: [] }
+    if (employeeIds && employeeIds.length > 0) {
+      query = query.in("employee_id", employeeIds)
     }
 
-    // Process the data
-    const reportData: AttendanceReportData[] = employees.map((employee) => {
-      const attendance: { [date: string]: { morning?: any; afternoon?: any; merged?: any } } = {}
+    const { data, error } = await query
 
-      // Generate all dates in the period
-      const currentDate = new Date(reportPeriod.startDate)
-      const endDate = new Date(reportPeriod.endDate)
+    if (error) {
+      console.error("Error fetching attendance report:", error)
+      return []
+    }
 
-      while (currentDate <= endDate) {
-        const dateStr = currentDate.toISOString().split("T")[0]
-        attendance[dateStr] = {}
+    if (!data || data.length === 0) {
+      return []
+    }
 
-        // Find attendance records for this employee and date
-        const morningRecord = attendanceData?.find(
-          (record) => record.employee_id === employee.id && record.date === dateStr && record.period === "morning",
-        )
-        const afternoonRecord = attendanceData?.find(
-          (record) => record.employee_id === employee.id && record.date === dateStr && record.period === "afternoon",
-        )
-
-        // Process morning attendance
-        if (morningRecord) {
-          const justification = morningRecord.attendance_justifications?.[0]
-          attendance[dateStr].morning = getAttendanceCode(morningRecord.status, justification?.justification_type)
-        } else {
-          attendance[dateStr].morning = "F"
-        }
-
-        // Process afternoon attendance
-        if (afternoonRecord) {
-          const justification = afternoonRecord.attendance_justifications?.[0]
-          attendance[dateStr].afternoon = getAttendanceCode(afternoonRecord.status, justification?.justification_type)
-        } else {
-          attendance[dateStr].afternoon = "F"
-        }
-
-        // Check if both periods have the same status - if so, merge them
-        const morningStatus = attendance[dateStr].morning
-        const afternoonStatus = attendance[dateStr].afternoon
-
-        if (morningStatus && afternoonStatus && morningStatus === afternoonStatus) {
-          attendance[dateStr].merged = morningStatus
-        }
-
-        currentDate.setDate(currentDate.getDate() + 1)
+    // Group by employee and calculate statistics
+    const employeeStats = new Map<
+      string,
+      {
+        employee: any
+        statuses: string[]
       }
+    >()
 
-      return {
-        employee: {
-          id: employee.id,
-          name: employee.name,
-          employee_number: employee.employee_number,
-          department: employee.department || "",
-          position: employee.position || "",
-        },
-        attendance,
+    data.forEach((record) => {
+      const employeeId = record.employee_id
+      if (!employeeStats.has(employeeId)) {
+        employeeStats.set(employeeId, {
+          employee: record.employees,
+          statuses: [],
+        })
+      }
+      employeeStats.get(employeeId)!.statuses.push(record.status)
+    })
+
+    // Calculate report data
+    const reports: AttendanceReport[] = []
+
+    employeeStats.forEach((stats, employeeId) => {
+      const totalDays = stats.statuses.length
+      const presentDays = stats.statuses.filter((s) => s === "present").length
+      const absentDays = stats.statuses.filter((s) => s === "absent").length
+      const lateDays = stats.statuses.filter((s) => s === "late").length
+      const excusedDays = stats.statuses.filter((s) => s === "excused").length
+      const attendanceRate = totalDays > 0 ? ((presentDays + lateDays) / totalDays) * 100 : 0
+
+      reports.push({
+        employee_id: employeeId,
+        employee_name: stats.employee.name,
+        employee_number: stats.employee.employee_number,
+        department: stats.employee.department,
+        position: stats.employee.position,
+        category: stats.employee.category,
+        total_days: totalDays,
+        present_days: presentDays,
+        absent_days: absentDays,
+        late_days: lateDays,
+        excused_days: excusedDays,
+        attendance_rate: Math.round(attendanceRate * 100) / 100,
+      })
+    })
+
+    return reports.sort((a, b) => a.employee_name.localeCompare(b.employee_name))
+  } catch (error) {
+    console.error("Error in getAttendanceReport:", error)
+    return []
+  }
+}
+
+export async function getPeriodReport(startDate: string, endDate: string): Promise<PeriodReport> {
+  try {
+    const reports = await getAttendanceReport(startDate, endDate)
+
+    const totalEmployees = reports.length
+    const totalDays = reports.reduce((sum, r) => sum + r.total_days, 0)
+    const presentDays = reports.reduce((sum, r) => sum + r.present_days, 0)
+    const absentDays = reports.reduce((sum, r) => sum + r.absent_days, 0)
+    const lateDays = reports.reduce((sum, r) => sum + r.late_days, 0)
+    const excusedDays = reports.reduce((sum, r) => sum + r.excused_days, 0)
+    const overallAttendanceRate = totalDays > 0 ? ((presentDays + lateDays) / totalDays) * 100 : 0
+
+    return {
+      period: `${startDate} to ${endDate}`,
+      total_employees: totalEmployees,
+      total_days: totalDays,
+      present_days: presentDays,
+      absent_days: absentDays,
+      late_days: lateDays,
+      excused_days: excusedDays,
+      overall_attendance_rate: Math.round(overallAttendanceRate * 100) / 100,
+      employees: reports,
+    }
+  } catch (error) {
+    console.error("Error in getPeriodReport:", error)
+    return {
+      period: `${startDate} to ${endDate}`,
+      total_employees: 0,
+      total_days: 0,
+      present_days: 0,
+      absent_days: 0,
+      late_days: 0,
+      excused_days: 0,
+      overall_attendance_rate: 0,
+      employees: [],
+    }
+  }
+}
+
+export async function exportAttendanceReport(
+  startDate: string,
+  endDate: string,
+  employeeIds?: string[],
+): Promise<string> {
+  try {
+    const reports = await getAttendanceReport(startDate, endDate, employeeIds)
+
+    // Create CSV content
+    const headers = [
+      "Employee Number",
+      "Employee Name",
+      "Department",
+      "Position",
+      "Category",
+      "Total Days",
+      "Present Days",
+      "Absent Days",
+      "Late Days",
+      "Excused Days",
+      "Attendance Rate (%)",
+    ]
+
+    const csvContent = [
+      headers.join(","),
+      ...reports.map((report) =>
+        [
+          report.employee_number,
+          `"${report.employee_name}"`,
+          `"${report.department}"`,
+          `"${report.position}"`,
+          report.category,
+          report.total_days,
+          report.present_days,
+          report.absent_days,
+          report.late_days,
+          report.excused_days,
+          report.attendance_rate,
+        ].join(","),
+      ),
+    ].join("\n")
+
+    return csvContent
+  } catch (error) {
+    console.error("Error in exportAttendanceReport:", error)
+    return ""
+  }
+}
+
+export async function getAttendanceTrends(
+  employeeId: string,
+  months = 6,
+): Promise<
+  Array<{
+    month: string
+    attendance_rate: number
+    total_days: number
+    present_days: number
+  }>
+> {
+  try {
+    const endDate = new Date()
+    const startDate = new Date()
+    startDate.setMonth(startDate.getMonth() - months)
+
+    const { data, error } = await supabase
+      .from("attendance")
+      .select("date, status")
+      .eq("employee_id", employeeId)
+      .gte("date", startDate.toISOString().split("T")[0])
+      .lte("date", endDate.toISOString().split("T")[0])
+      .order("date", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching attendance trends:", error)
+      return []
+    }
+
+    if (!data || data.length === 0) {
+      return []
+    }
+
+    // Group by month
+    const monthlyData = new Map<string, { present: number; total: number }>()
+
+    data.forEach((record) => {
+      const month = record.date.substring(0, 7) // YYYY-MM format
+      if (!monthlyData.has(month)) {
+        monthlyData.set(month, { present: 0, total: 0 })
+      }
+      const monthData = monthlyData.get(month)!
+      monthData.total++
+      if (record.status === "present" || record.status === "late") {
+        monthData.present++
       }
     })
 
-    return {
-      reportPeriod,
-      employees: reportData,
-    }
+    // Convert to array and calculate rates
+    const trends = Array.from(monthlyData.entries()).map(([month, data]) => ({
+      month,
+      attendance_rate: data.total > 0 ? Math.round((data.present / data.total) * 10000) / 100 : 0,
+      total_days: data.total,
+      present_days: data.present,
+    }))
+
+    return trends.sort((a, b) => a.month.localeCompare(b.month))
   } catch (error) {
-    console.error("Error generating attendance report:", error)
-    const fallbackPeriod = getCurrentReportPeriod()
-    return { reportPeriod: fallbackPeriod, employees: [] }
+    console.error("Error in getAttendanceTrends:", error)
+    return []
   }
-}
-
-export function formatReportDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
-}
-
-export function getReportPeriodTitle(period: ReportPeriod): string {
-  return `${period.label} ${period.year}${period.label.includes("December/January") ? `/${period.year + 1}` : ""}`
-}
-
-export function getAvailableYears(): number[] {
-  const currentYear = new Date().getFullYear()
-  const years = []
-
-  for (let year = currentYear - 2; year <= currentYear + 2; year++) {
-    years.push(year)
-  }
-
-  return years
 }

@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -13,51 +13,81 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { Search, Users, Filter, Edit, Plus, Trash2 } from "lucide-react"
-import { getEmployees, getDepartments, updateEmployee, createEmployee, deleteEmployee } from "@/lib/employee-management"
+import {
+  getEmployees,
+  getEmployeeStats,
+  getDepartments,
+  getPositions,
+  createEmployee,
+  updateEmployee,
+  deleteEmployee,
+} from "@/lib/employee-management"
 import type { Employee } from "@/lib/supabase"
+import { Users, Search, Filter, Plus, Edit, Trash2, Building, Briefcase, UserCheck, UserX } from "lucide-react"
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([])
+  const [stats, setStats] = useState({
+    total: 0,
+    regular: 0,
+    teacher: 0,
+    outsourced: 0,
+    active: 0,
+    inactive: 0,
+  })
   const [departments, setDepartments] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [positions, setPositions] = useState<string[]>([])
   const [filters, setFilters] = useState({
     search: "",
     department: "all",
-    status: "all",
+    position: "all",
     category: "all",
+    status: "all",
   })
-  const { toast } = useToast()
-
+  const [loading, setLoading] = useState(true)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     employee_number: "",
+    email: "",
+    phone: "",
     department: "",
     position: "",
-    hire_date: "",
-    status: "active" as "active" | "inactive",
     category: "regular" as "regular" | "teacher" | "outsourced",
-    phone: "",
-    email: "",
-    address: "",
+    status: "active" as "active" | "inactive",
+    hire_date: "",
+    salary: "",
   })
+  const { toast } = useToast()
 
   useEffect(() => {
     loadData()
-  }, [filters])
+  }, [])
+
+  useEffect(() => {
+    filterEmployees()
+  }, [employees, filters])
 
   const loadData = async () => {
     try {
-      const [employeesData, departmentsData] = await Promise.all([getEmployees(filters), getDepartments()])
+      const [employeesData, statsData, departmentsData, positionsData] = await Promise.all([
+        getEmployees(),
+        getEmployeeStats(),
+        getDepartments(),
+        getPositions(),
+      ])
       setEmployees(employeesData)
+      setStats(statsData)
       setDepartments(departmentsData)
+      setPositions(positionsData)
     } catch (error) {
       console.error("Error loading employees:", error)
       toast({
@@ -70,113 +100,236 @@ export default function EmployeesPage() {
     }
   }
 
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
+  const filterEmployees = () => {
+    let filtered = employees
+
+    if (filters.search) {
+      filtered = filtered.filter(
+        (emp) =>
+          emp.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+          emp.employee_number.toLowerCase().includes(filters.search.toLowerCase()) ||
+          emp.email?.toLowerCase().includes(filters.search.toLowerCase()) ||
+          emp.department.toLowerCase().includes(filters.search.toLowerCase()) ||
+          emp.position.toLowerCase().includes(filters.search.toLowerCase()),
+      )
+    }
+
+    if (filters.department !== "all") {
+      filtered = filtered.filter((emp) => emp.department === filters.department)
+    }
+
+    if (filters.position !== "all") {
+      filtered = filtered.filter((emp) => emp.position === filters.position)
+    }
+
+    if (filters.category !== "all") {
+      filtered = filtered.filter((emp) => emp.category === filters.category)
+    }
+
+    if (filters.status !== "all") {
+      filtered = filtered.filter((emp) => emp.status === filters.status)
+    }
+
+    setFilteredEmployees(filtered)
   }
 
-  const handleEdit = (employee: Employee) => {
-    setEditingEmployee(employee)
-    setFormData({
-      name: employee.name,
-      employee_number: employee.employee_number,
-      department: employee.department || "",
-      position: employee.position || "",
-      hire_date: employee.hire_date,
-      status: employee.status,
-      category: employee.category,
-      phone: employee.phone || "",
-      email: employee.email || "",
-      address: employee.address || "",
-    })
-    setIsEditDialogOpen(true)
-  }
-
-  const handleCreate = () => {
+  const resetForm = () => {
     setFormData({
       name: "",
       employee_number: "",
+      email: "",
+      phone: "",
       department: "",
       position: "",
-      hire_date: "",
-      status: "active",
       category: "regular",
-      phone: "",
-      email: "",
-      address: "",
+      status: "active",
+      hire_date: "",
+      salary: "",
     })
-    setIsCreateDialogOpen(true)
   }
 
-  const handleSave = async () => {
+  const handleCreate = async () => {
+    if (!formData.name || !formData.employee_number || !formData.department || !formData.position) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
-      if (editingEmployee) {
-        const updated = await updateEmployee(editingEmployee.id, formData)
-        if (updated) {
-          toast({
-            title: "Success",
-            description: "Employee updated successfully",
-          })
-          setIsEditDialogOpen(false)
-          setEditingEmployee(null)
-          loadData()
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to update employee",
-            variant: "destructive",
-          })
-        }
+      const success = await createEmployee({
+        name: formData.name,
+        employee_number: formData.employee_number,
+        email: formData.email,
+        phone: formData.phone,
+        department: formData.department,
+        position: formData.position,
+        category: formData.category,
+        status: formData.status,
+        hire_date: formData.hire_date || null,
+        salary: formData.salary ? Number.parseFloat(formData.salary) : null,
+      })
+
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Employee created successfully",
+        })
+        setIsCreateDialogOpen(false)
+        resetForm()
+        await loadData()
       } else {
-        const created = await createEmployee(formData)
-        if (created) {
-          toast({
-            title: "Success",
-            description: "Employee created successfully",
-          })
-          setIsCreateDialogOpen(false)
-          loadData()
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to create employee",
-            variant: "destructive",
-          })
-        }
+        toast({
+          title: "Error",
+          description: "Failed to create employee",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "An error occurred",
+        description: "Failed to create employee",
         variant: "destructive",
       })
     }
   }
 
-  const handleDelete = async (employee: Employee) => {
-    if (confirm(`Are you sure you want to delete ${employee.name}?`)) {
-      try {
-        const success = await deleteEmployee(employee.id)
-        if (success) {
-          toast({
-            title: "Success",
-            description: "Employee deleted successfully",
-          })
-          loadData()
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to delete employee",
-            variant: "destructive",
-          })
-        }
-      } catch (error) {
+  const handleEdit = async () => {
+    if (
+      !selectedEmployee ||
+      !formData.name ||
+      !formData.employee_number ||
+      !formData.department ||
+      !formData.position
+    ) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const success = await updateEmployee(selectedEmployee.id, {
+        name: formData.name,
+        employee_number: formData.employee_number,
+        email: formData.email,
+        phone: formData.phone,
+        department: formData.department,
+        position: formData.position,
+        category: formData.category,
+        status: formData.status,
+        hire_date: formData.hire_date || null,
+        salary: formData.salary ? Number.parseFloat(formData.salary) : null,
+      })
+
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Employee updated successfully",
+        })
+        setIsEditDialogOpen(false)
+        setSelectedEmployee(null)
+        resetForm()
+        await loadData()
+      } else {
         toast({
           title: "Error",
-          description: "An error occurred",
+          description: "Failed to update employee",
           variant: "destructive",
         })
       }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update employee",
+        variant: "destructive",
+      })
     }
+  }
+
+  const handleDelete = async () => {
+    if (!selectedEmployee) return
+
+    try {
+      const success = await deleteEmployee(selectedEmployee.id)
+
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Employee deleted successfully",
+        })
+        setIsDeleteDialogOpen(false)
+        setSelectedEmployee(null)
+        await loadData()
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to delete employee",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete employee",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const openEditDialog = (employee: Employee) => {
+    setSelectedEmployee(employee)
+    setFormData({
+      name: employee.name,
+      employee_number: employee.employee_number,
+      email: employee.email || "",
+      phone: employee.phone || "",
+      department: employee.department,
+      position: employee.position,
+      category: employee.category,
+      status: employee.status,
+      hire_date: employee.hire_date || "",
+      salary: employee.salary?.toString() || "",
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const openDeleteDialog = (employee: Employee) => {
+    setSelectedEmployee(employee)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const getCategoryBadge = (category: string) => {
+    switch (category) {
+      case "teacher":
+        return (
+          <Badge variant="default" className="bg-blue-100 text-blue-800">
+            Teacher
+          </Badge>
+        )
+      case "outsourced":
+        return <Badge variant="secondary">Outsourced</Badge>
+      default:
+        return <Badge variant="outline">Regular</Badge>
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    return status === "active" ? (
+      <Badge variant="default" className="bg-green-100 text-green-800">
+        <UserCheck className="h-3 w-3 mr-1" />
+        Active
+      </Badge>
+    ) : (
+      <Badge variant="destructive">
+        <UserX className="h-3 w-3 mr-1" />
+        Inactive
+      </Badge>
+    )
   }
 
   if (loading) {
@@ -194,10 +347,196 @@ export default function EmployeesPage() {
           <h1 className="text-3xl font-bold text-gray-900">Employees</h1>
           <p className="text-gray-600">Manage employee information and records</p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Employee
-        </Button>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={resetForm}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Employee
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create New Employee</DialogTitle>
+              <DialogDescription>Add a new employee to the system</DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="create_name">Name *</Label>
+                <Input
+                  id="create_name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Full name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create_employee_number">Employee Number *</Label>
+                <Input
+                  id="create_employee_number"
+                  value={formData.employee_number}
+                  onChange={(e) => setFormData({ ...formData, employee_number: e.target.value })}
+                  placeholder="EMP001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create_email">Email</Label>
+                <Input
+                  id="create_email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="email@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create_phone">Phone</Label>
+                <Input
+                  id="create_phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="Phone number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create_department">Department *</Label>
+                <Input
+                  id="create_department"
+                  value={formData.department}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  placeholder="Department name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create_position">Position *</Label>
+                <Input
+                  id="create_position"
+                  value={formData.position}
+                  onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                  placeholder="Job position"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create_category">Category</Label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value: any) => setFormData({ ...formData, category: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="regular">Regular</SelectItem>
+                    <SelectItem value="teacher">Teacher</SelectItem>
+                    <SelectItem value="outsourced">Outsourced</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create_status">Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value: any) => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create_hire_date">Hire Date</Label>
+                <Input
+                  id="create_hire_date"
+                  type="date"
+                  value={formData.hire_date}
+                  onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create_salary">Salary</Label>
+                <Input
+                  id="create_salary"
+                  type="number"
+                  value={formData.salary}
+                  onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                  placeholder="Monthly salary"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreate}>Create Employee</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Regular</CardTitle>
+            <Briefcase className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{stats.regular}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Teachers</CardTitle>
+            <Building className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.teacher}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Outsourced</CardTitle>
+            <Users className="h-4 w-4 text-purple-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">{stats.outsourced}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active</CardTitle>
+            <UserCheck className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Inactive</CardTitle>
+            <UserX className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.inactive}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -205,21 +544,21 @@ export default function EmployeesPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            Filters
+            Filter Employees
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
                 placeholder="Search employees..."
                 value={filters.search}
-                onChange={(e) => handleFilterChange("search", e.target.value)}
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                 className="pl-10"
               />
             </div>
-            <Select value={filters.department} onValueChange={(value) => handleFilterChange("department", value)}>
+            <Select value={filters.department} onValueChange={(value) => setFilters({ ...filters, department: value })}>
               <SelectTrigger>
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
@@ -232,7 +571,31 @@ export default function EmployeesPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filters.status} onValueChange={(value) => handleFilterChange("status", value)}>
+            <Select value={filters.position} onValueChange={(value) => setFilters({ ...filters, position: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Position" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Positions</SelectItem>
+                {positions.map((pos) => (
+                  <SelectItem key={pos} value={pos}>
+                    {pos}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filters.category} onValueChange={(value) => setFilters({ ...filters, category: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="regular">Regular</SelectItem>
+                <SelectItem value="teacher">Teacher</SelectItem>
+                <SelectItem value="outsourced">Outsourced</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
               <SelectTrigger>
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -242,80 +605,72 @@ export default function EmployeesPage() {
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filters.category} onValueChange={(value) => handleFilterChange("category", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="teacher">Teacher</SelectItem>
-                <SelectItem value="regular">Regular</SelectItem>
-                <SelectItem value="outsourced">Outsourced</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Employee List */}
+      {/* Employees List */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Employee List ({employees.length})
+            Employees ({filteredEmployees.length})
           </CardTitle>
           <CardDescription>
-            {filters.search || filters.department !== "all" || filters.status !== "all" || filters.category !== "all"
+            {filters.search ||
+            filters.department !== "all" ||
+            filters.position !== "all" ||
+            filters.category !== "all" ||
+            filters.status !== "all"
               ? "Filtered results"
               : "All employees"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {employees.length === 0 ? (
+          {filteredEmployees.length === 0 ? (
             <div className="text-center py-8 text-gray-500">No employees found matching the current filters.</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {employees.map((employee) => (
-                <Card key={employee.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-semibold text-lg">{employee.name}</h3>
-                          <p className="text-sm text-gray-600">{employee.employee_number}</p>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <Badge variant={employee.status === "active" ? "default" : "secondary"}>
-                            {employee.status}
-                          </Badge>
-                          <Badge variant="outline">{employee.category}</Badge>
-                        </div>
-                      </div>
-                      <div className="space-y-1 text-sm">
-                        <p>
-                          <span className="font-medium">Position:</span> {employee.position}
-                        </p>
-                        <p>
-                          <span className="font-medium">Department:</span> {employee.department}
-                        </p>
-                        <p>
-                          <span className="font-medium">Hire Date:</span>{" "}
-                          {new Date(employee.hire_date).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex gap-2 pt-2">
-                        <Button size="sm" variant="outline" onClick={() => handleEdit(employee)}>
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleDelete(employee)}>
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Delete
-                        </Button>
+            <div className="space-y-4">
+              {filteredEmployees.map((employee) => (
+                <div key={employee.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div>
+                        <h3 className="font-medium text-gray-900">{employee.name}</h3>
+                        <p className="text-sm text-gray-500">#{employee.employee_number}</p>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Building className="h-4 w-4" />
+                        {employee.department}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Briefcase className="h-4 w-4" />
+                        {employee.position}
+                      </div>
+                      {employee.email && <div className="flex items-center gap-1">{employee.email}</div>}
+                      {employee.hire_date && (
+                        <div className="flex items-center gap-1">
+                          Hired: {new Date(employee.hire_date).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {getCategoryBadge(employee.category)}
+                    {getStatusBadge(employee.status)}
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openEditDialog(employee)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openDeleteDialog(employee)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -331,68 +686,65 @@ export default function EmployeesPage() {
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="edit_name">Name *</Label>
               <Input
-                id="name"
+                id="edit_name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Full name"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="employee_number">Employee Number</Label>
+              <Label htmlFor="edit_employee_number">Employee Number *</Label>
               <Input
-                id="employee_number"
+                id="edit_employee_number"
                 value={formData.employee_number}
                 onChange={(e) => setFormData({ ...formData, employee_number: e.target.value })}
+                placeholder="EMP001"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="department">Department</Label>
+              <Label htmlFor="edit_email">Email</Label>
               <Input
-                id="department"
+                id="edit_email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="email@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_phone">Phone</Label>
+              <Input
+                id="edit_phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="Phone number"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_department">Department *</Label>
+              <Input
+                id="edit_department"
                 value={formData.department}
                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                placeholder="Department name"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="position">Position</Label>
+              <Label htmlFor="edit_position">Position *</Label>
               <Input
-                id="position"
+                id="edit_position"
                 value={formData.position}
                 onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                placeholder="Job position"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="hire_date">Hire Date</Label>
-              <Input
-                id="hire_date"
-                type="date"
-                value={formData.hire_date}
-                onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: "active" | "inactive") => setFormData({ ...formData, status: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+              <Label htmlFor="edit_category">Category</Label>
               <Select
                 value={formData.category}
-                onValueChange={(value: "regular" | "teacher" | "outsourced") =>
-                  setFormData({ ...formData, category: value })
-                }
+                onValueChange={(value: any) => setFormData({ ...formData, category: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -405,28 +757,37 @@ export default function EmployeesPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
+              <Label htmlFor="edit_status">Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value: any) => setFormData({ ...formData, status: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit_hire_date">Hire Date</Label>
               <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                id="edit_hire_date"
+                type="date"
+                value={formData.hire_date}
+                onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
               />
             </div>
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="email">Email</Label>
+            <div className="space-y-2">
+              <Label htmlFor="edit_salary">Salary</Label>
               <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="address">Address</Label>
-              <Textarea
-                id="address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                id="edit_salary"
+                type="number"
+                value={formData.salary}
+                onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                placeholder="Monthly salary"
               />
             </div>
           </div>
@@ -434,124 +795,27 @@ export default function EmployeesPage() {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>Save Changes</Button>
+            <Button onClick={handleEdit}>Update Employee</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Create Employee Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-2xl">
+      {/* Delete Employee Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add New Employee</DialogTitle>
-            <DialogDescription>Create a new employee record</DialogDescription>
+            <DialogTitle>Delete Employee</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedEmployee?.name}? This action cannot be undone.
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="create_name">Name</Label>
-              <Input
-                id="create_name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create_employee_number">Employee Number</Label>
-              <Input
-                id="create_employee_number"
-                value={formData.employee_number}
-                onChange={(e) => setFormData({ ...formData, employee_number: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create_department">Department</Label>
-              <Input
-                id="create_department"
-                value={formData.department}
-                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create_position">Position</Label>
-              <Input
-                id="create_position"
-                value={formData.position}
-                onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create_hire_date">Hire Date</Label>
-              <Input
-                id="create_hire_date"
-                type="date"
-                value={formData.hire_date}
-                onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create_status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: "active" | "inactive") => setFormData({ ...formData, status: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create_category">Category</Label>
-              <Select
-                value={formData.category}
-                onValueChange={(value: "regular" | "teacher" | "outsourced") =>
-                  setFormData({ ...formData, category: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="regular">Regular</SelectItem>
-                  <SelectItem value="teacher">Teacher</SelectItem>
-                  <SelectItem value="outsourced">Outsourced</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create_phone">Phone</Label>
-              <Input
-                id="create_phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="create_email">Email</Label>
-              <Input
-                id="create_email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="create_address">Address</Label>
-              <Textarea
-                id="create_address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              />
-            </div>
-          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>Create Employee</Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              Delete Employee
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
