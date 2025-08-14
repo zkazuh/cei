@@ -1,137 +1,169 @@
 import { supabase } from "./supabase"
-
-export interface AttendanceRecord {
-  id: string
-  employee_id: string
-  date: string
-  status: "present" | "absent" | "late" | "sick" | "vacation"
-  check_in_time?: string
-  check_out_time?: string
-  notes?: string
-  marked_by: string
-  created_at: string
-  updated_at: string
-}
+import type { AttendanceRecord } from "./supabase"
 
 export interface AttendanceStats {
-  total: number
-  present: number
-  absent: number
-  late: number
-  sick: number
-  vacation: number
+  totalEmployees: number
+  presentToday: number
+  absentToday: number
   attendanceRate: number
 }
 
-export async function getAttendanceForDate(date: string): Promise<AttendanceRecord[]> {
+export interface AttendanceFilters {
+  employeeId?: string
+  date?: string
+  status?: string
+  department?: string
+}
+
+export async function getTodayAttendance(): Promise<AttendanceRecord[]> {
   try {
+    const today = new Date().toISOString().split("T")[0]
     const { data, error } = await supabase
       .from("attendance")
-      .select("*")
-      .eq("date", date)
+      .select(`
+        *,
+        employees (
+          id,
+          name,
+          employee_number,
+          department,
+          position
+        )
+      `)
+      .eq("date", today)
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Error fetching attendance for date:", error)
+      console.error("Error fetching today's attendance:", error)
       return []
     }
 
     return data || []
   } catch (error) {
-    console.error("Error in getAttendanceForDate:", error)
+    console.error("Error in getTodayAttendance:", error)
+    return []
+  }
+}
+
+export async function getAttendanceByDate(date: string): Promise<AttendanceRecord[]> {
+  try {
+    const { data, error } = await supabase
+      .from("attendance")
+      .select(`
+        *,
+        employees (
+          id,
+          name,
+          employee_number,
+          department,
+          position
+        )
+      `)
+      .eq("date", date)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching attendance by date:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getAttendanceByDate:", error)
     return []
   }
 }
 
 export async function getAttendanceStatsForDate(date: string): Promise<AttendanceStats> {
   try {
-    const { data, error } = await supabase.from("attendance").select("status").eq("date", date)
+    // Get total active employees
+    const { data: employees, error: empError } = await supabase.from("employees").select("id").eq("status", "active")
 
-    if (error) {
-      console.error("Error fetching attendance stats:", error)
-      return {
-        total: 0,
-        present: 0,
-        absent: 0,
-        late: 0,
-        sick: 0,
-        vacation: 0,
-        attendanceRate: 0,
-      }
+    if (empError) {
+      console.error("Error fetching employees for stats:", empError)
+      return { totalEmployees: 0, presentToday: 0, absentToday: 0, attendanceRate: 0 }
     }
 
-    if (!data || data.length === 0) {
-      return {
-        total: 0,
-        present: 0,
-        absent: 0,
-        late: 0,
-        sick: 0,
-        vacation: 0,
-        attendanceRate: 0,
-      }
+    const totalEmployees = employees?.length || 0
+
+    // Get attendance for the date
+    const { data: attendance, error: attError } = await supabase.from("attendance").select("status").eq("date", date)
+
+    if (attError) {
+      console.error("Error fetching attendance for stats:", attError)
+      return { totalEmployees, presentToday: 0, absentToday: 0, attendanceRate: 0 }
     }
 
-    const stats = {
-      total: data.length,
-      present: data.filter((record) => record.status === "present").length,
-      absent: data.filter((record) => record.status === "absent").length,
-      late: data.filter((record) => record.status === "late").length,
-      sick: data.filter((record) => record.status === "sick").length,
-      vacation: data.filter((record) => record.status === "vacation").length,
-      attendanceRate: 0,
+    const presentToday = attendance?.filter((record) => record.status === "present").length || 0
+    const absentToday = attendance?.filter((record) => record.status === "absent").length || 0
+    const attendanceRate = totalEmployees > 0 ? (presentToday / totalEmployees) * 100 : 0
+
+    return {
+      totalEmployees,
+      presentToday,
+      absentToday,
+      attendanceRate: Math.round(attendanceRate * 100) / 100,
     }
-
-    // Calculate attendance rate (present + late / total)
-    stats.attendanceRate = stats.total > 0 ? ((stats.present + stats.late) / stats.total) * 100 : 0
-
-    return stats
   } catch (error) {
     console.error("Error in getAttendanceStatsForDate:", error)
-    return {
-      total: 0,
-      present: 0,
-      absent: 0,
-      late: 0,
-      sick: 0,
-      vacation: 0,
-      attendanceRate: 0,
-    }
+    return { totalEmployees: 0, presentToday: 0, absentToday: 0, attendanceRate: 0 }
   }
 }
 
 export async function markAttendance(
   employeeId: string,
   date: string,
-  status: "present" | "absent" | "late" | "sick" | "vacation",
-  markedBy: string,
-  checkInTime?: string,
-  checkOutTime?: string,
-  notes?: string,
+  status: "present" | "absent" | "late" | "half_day",
+  markedBy = "00000000-0000-0000-0000-000000000000",
 ): Promise<boolean> {
   try {
-    // Use a default admin UUID if markedBy is invalid
-    const validMarkedBy = markedBy || "00000000-0000-0000-0000-000000000001"
+    // Validate UUID format for markedBy
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    const validMarkedBy = uuidRegex.test(markedBy) ? markedBy : "00000000-0000-0000-0000-000000000000"
 
-    const { error } = await supabase.from("attendance").upsert(
-      {
+    // Check if attendance already exists for this employee and date
+    const { data: existing, error: checkError } = await supabase
+      .from("attendance")
+      .select("id")
+      .eq("employee_id", employeeId)
+      .eq("date", date)
+      .single()
+
+    if (checkError && checkError.code !== "PGRST116") {
+      console.error("Error checking existing attendance:", checkError)
+      return false
+    }
+
+    if (existing) {
+      // Update existing record
+      const { error } = await supabase
+        .from("attendance")
+        .update({
+          status,
+          marked_by: validMarkedBy,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id)
+
+      if (error) {
+        console.error("Error updating attendance:", error)
+        return false
+      }
+    } else {
+      // Create new record
+      const { error } = await supabase.from("attendance").insert({
         employee_id: employeeId,
         date,
         status,
-        check_in_time: checkInTime,
-        check_out_time: checkOutTime,
-        notes,
         marked_by: validMarkedBy,
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "employee_id,date",
-      },
-    )
+      })
 
-    if (error) {
-      console.error("Error marking attendance:", error)
-      return false
+      if (error) {
+        console.error("Error creating attendance:", error)
+        return false
+      }
     }
 
     return true
@@ -141,77 +173,120 @@ export async function markAttendance(
   }
 }
 
-export async function getEmployeeAttendance(
-  employeeId: string,
-  startDate: string,
-  endDate: string,
-): Promise<AttendanceRecord[]> {
-  try {
-    const { data, error } = await supabase
-      .from("attendance")
-      .select("*")
-      .eq("employee_id", employeeId)
-      .gte("date", startDate)
-      .lte("date", endDate)
-      .order("date", { ascending: false })
-
-    if (error) {
-      console.error("Error fetching employee attendance:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error in getEmployeeAttendance:", error)
-    return []
-  }
-}
-
 export async function bulkMarkAttendance(
   records: Array<{
     employeeId: string
     date: string
-    status: "present" | "absent" | "late" | "sick" | "vacation"
-    checkInTime?: string
-    checkOutTime?: string
-    notes?: string
+    status: "present" | "absent" | "late" | "half_day"
   }>,
-  markedBy: string,
+  markedBy = "00000000-0000-0000-0000-000000000000",
 ): Promise<boolean> {
   try {
-    // Use a default admin UUID if markedBy is invalid
-    const validMarkedBy = markedBy || "00000000-0000-0000-0000-000000000001"
+    const promises = records.map((record) => markAttendance(record.employeeId, record.date, record.status, markedBy))
 
-    const attendanceRecords = records.map((record) => ({
-      employee_id: record.employeeId,
-      date: record.date,
-      status: record.status,
-      check_in_time: record.checkInTime,
-      check_out_time: record.checkOutTime,
-      notes: record.notes,
-      marked_by: validMarkedBy,
-      updated_at: new Date().toISOString(),
-    }))
-
-    const { error } = await supabase.from("attendance").upsert(attendanceRecords, {
-      onConflict: "employee_id,date",
-    })
-
-    if (error) {
-      console.error("Error bulk marking attendance:", error)
-      return false
-    }
-
-    return true
+    const results = await Promise.all(promises)
+    return results.every((result) => result === true)
   } catch (error) {
     console.error("Error in bulkMarkAttendance:", error)
     return false
   }
 }
 
-export async function deleteAttendanceRecord(id: string): Promise<boolean> {
+export async function getEmployeeAttendanceHistory(
+  employeeId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<AttendanceRecord[]> {
   try {
-    const { error } = await supabase.from("attendance").delete().eq("id", id)
+    let query = supabase
+      .from("attendance")
+      .select(`
+        *,
+        employees (
+          id,
+          name,
+          employee_number,
+          department,
+          position
+        )
+      `)
+      .eq("employee_id", employeeId)
+      .order("date", { ascending: false })
+
+    if (startDate) {
+      query = query.gte("date", startDate)
+    }
+
+    if (endDate) {
+      query = query.lte("date", endDate)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error("Error fetching employee attendance history:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getEmployeeAttendanceHistory:", error)
+    return []
+  }
+}
+
+export async function getAttendanceReport(
+  startDate: string,
+  endDate: string,
+  filters?: AttendanceFilters,
+): Promise<AttendanceRecord[]> {
+  try {
+    let query = supabase
+      .from("attendance")
+      .select(`
+        *,
+        employees (
+          id,
+          name,
+          employee_number,
+          department,
+          position,
+          category
+        )
+      `)
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .order("date", { ascending: false })
+
+    if (filters?.employeeId) {
+      query = query.eq("employee_id", filters.employeeId)
+    }
+
+    if (filters?.status && filters.status !== "all") {
+      query = query.eq("status", filters.status)
+    }
+
+    if (filters?.department && filters.department !== "all") {
+      query = query.eq("employees.department", filters.department)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error("Error fetching attendance report:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getAttendanceReport:", error)
+    return []
+  }
+}
+
+export async function deleteAttendanceRecord(recordId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("attendance").delete().eq("id", recordId)
 
     if (error) {
       console.error("Error deleting attendance record:", error)
@@ -222,48 +297,5 @@ export async function deleteAttendanceRecord(id: string): Promise<boolean> {
   } catch (error) {
     console.error("Error in deleteAttendanceRecord:", error)
     return false
-  }
-}
-
-export async function getAttendanceHistory(limit = 100): Promise<AttendanceRecord[]> {
-  try {
-    const { data, error } = await supabase
-      .from("attendance")
-      .select("*")
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(limit)
-
-    if (error) {
-      console.error("Error fetching attendance history:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error in getAttendanceHistory:", error)
-    return []
-  }
-}
-
-export async function getAttendanceByDateRange(startDate: string, endDate: string): Promise<AttendanceRecord[]> {
-  try {
-    const { data, error } = await supabase
-      .from("attendance")
-      .select("*")
-      .gte("date", startDate)
-      .lte("date", endDate)
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Error fetching attendance by date range:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error in getAttendanceByDateRange:", error)
-    return []
   }
 }
