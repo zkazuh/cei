@@ -7,45 +7,127 @@ import { getFileStats } from "@/lib/teacher-files"
 import { getAttendanceStatsForDate } from "@/lib/attendance"
 import { Users, FileText, Calendar, TrendingUp } from "lucide-react"
 
+interface DashboardStats {
+  employeeStats: {
+    total: number
+    active: number
+    inactive: number
+    byDepartment: Record<string, number>
+    byCategory: Record<string, number>
+    recentHires: any[]
+  }
+  fileStats: {
+    total: number
+    pending: number
+    submitted: number
+    overdue: number
+  }
+  attendanceStats: {
+    totalEmployees: number
+    presentCount: number
+    absentCount: number
+    lateCount: number
+    attendanceRate: number
+  }
+}
+
 export default function DashboardPage() {
-  const [employeeStats, setEmployeeStats] = useState({
-    total: 0,
-    active: 0,
-    inactive: 0,
-    byDepartment: {} as Record<string, number>,
-    byCategory: {} as Record<string, number>,
-    recentHires: [],
-  })
-  const [fileStats, setFileStats] = useState({
-    total: 0,
-    pending: 0,
-    submitted: 0,
-    overdue: 0,
-  })
-  const [attendanceStats, setAttendanceStats] = useState({
-    totalEmployees: 0,
-    presentCount: 0,
-    absentCount: 0,
-    lateCount: 0,
-    attendanceRate: 0,
+  const [stats, setStats] = useState<DashboardStats>({
+    employeeStats: {
+      total: 0,
+      active: 0,
+      inactive: 0,
+      byDepartment: {},
+      byCategory: {},
+      recentHires: [],
+    },
+    fileStats: {
+      total: 0,
+      pending: 0,
+      submitted: 0,
+      overdue: 0,
+    },
+    attendanceStats: {
+      totalEmployees: 0,
+      presentCount: 0,
+      absentCount: 0,
+      lateCount: 0,
+      attendanceRate: 0,
+    },
   })
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadStats() {
       try {
+        setLoading(true)
+        setError(null)
+
         const today = new Date().toISOString().split("T")[0]
-        const [empStats, fStats, attStats] = await Promise.all([
+
+        // Load stats with proper error handling
+        const [empStats, fStats, attStats] = await Promise.allSettled([
           getEmployeeStats(),
           getFileStats(),
           getAttendanceStatsForDate(today),
         ])
 
-        setEmployeeStats(empStats)
-        setFileStats(fStats)
-        setAttendanceStats(attStats)
+        // Handle employee stats
+        const employeeStats =
+          empStats.status === "fulfilled"
+            ? empStats.value
+            : {
+                total: 0,
+                active: 0,
+                inactive: 0,
+                byDepartment: {},
+                byCategory: {},
+                recentHires: [],
+              }
+
+        // Handle file stats
+        const fileStats =
+          fStats.status === "fulfilled"
+            ? fStats.value
+            : {
+                total: 0,
+                pending: 0,
+                submitted: 0,
+                overdue: 0,
+              }
+
+        // Handle attendance stats
+        const attendanceStats =
+          attStats.status === "fulfilled"
+            ? attStats.value
+            : {
+                totalEmployees: 0,
+                presentCount: 0,
+                absentCount: 0,
+                lateCount: 0,
+                attendanceRate: 0,
+              }
+
+        setStats({
+          employeeStats,
+          fileStats,
+          attendanceStats,
+        })
+
+        // Log any rejected promises
+        if (empStats.status === "rejected") {
+          console.error("Employee stats failed:", empStats.reason)
+        }
+        if (fStats.status === "rejected") {
+          console.error("File stats failed:", fStats.reason)
+        }
+        if (attStats.status === "rejected") {
+          console.error("Attendance stats failed:", attStats.reason)
+        }
       } catch (error) {
         console.error("Error loading dashboard stats:", error)
+        setError("Failed to load dashboard data. Please try again.")
       } finally {
         setLoading(false)
       }
@@ -58,6 +140,14 @@ export default function DashboardPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-lg">Loading dashboard...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg text-red-600">{error}</div>
       </div>
     )
   }
@@ -77,9 +167,9 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{employeeStats.total}</div>
+            <div className="text-2xl font-bold">{stats.employeeStats.total}</div>
             <p className="text-xs text-muted-foreground">
-              {employeeStats.active} active, {employeeStats.inactive} inactive
+              {stats.employeeStats.active} active, {stats.employeeStats.inactive} inactive
             </p>
           </CardContent>
         </Card>
@@ -90,9 +180,9 @@ export default function DashboardPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{attendanceStats.attendanceRate}%</div>
+            <div className="text-2xl font-bold">{stats.attendanceStats.attendanceRate}%</div>
             <p className="text-xs text-muted-foreground">
-              {attendanceStats.presentCount} present, {attendanceStats.absentCount} absent
+              {stats.attendanceStats.presentCount} present, {stats.attendanceStats.absentCount} absent
             </p>
           </CardContent>
         </Card>
@@ -103,9 +193,9 @@ export default function DashboardPage() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{fileStats.submitted}</div>
+            <div className="text-2xl font-bold">{stats.fileStats.submitted}</div>
             <p className="text-xs text-muted-foreground">
-              {fileStats.pending} pending, {fileStats.overdue} overdue
+              {stats.fileStats.pending} pending, {stats.fileStats.overdue} overdue
             </p>
           </CardContent>
         </Card>
@@ -131,12 +221,16 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {Object.entries(employeeStats.byDepartment).map(([dept, count]) => (
-                <div key={dept} className="flex justify-between items-center">
-                  <span className="text-sm font-medium">{dept}</span>
-                  <span className="text-sm text-gray-600">{count}</span>
-                </div>
-              ))}
+              {Object.keys(stats.employeeStats.byDepartment).length > 0 ? (
+                Object.entries(stats.employeeStats.byDepartment).map(([dept, count]) => (
+                  <div key={dept} className="flex justify-between items-center">
+                    <span className="text-sm font-medium">{dept}</span>
+                    <span className="text-sm text-gray-600">{count}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No department data available</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -148,12 +242,16 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {Object.entries(employeeStats.byCategory).map(([category, count]) => (
-                <div key={category} className="flex justify-between items-center">
-                  <span className="text-sm font-medium capitalize">{category}</span>
-                  <span className="text-sm text-gray-600">{count}</span>
-                </div>
-              ))}
+              {Object.keys(stats.employeeStats.byCategory).length > 0 ? (
+                Object.entries(stats.employeeStats.byCategory).map(([category, count]) => (
+                  <div key={category} className="flex justify-between items-center">
+                    <span className="text-sm font-medium capitalize">{category}</span>
+                    <span className="text-sm text-gray-600">{count}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">No category data available</p>
+              )}
             </div>
           </CardContent>
         </Card>

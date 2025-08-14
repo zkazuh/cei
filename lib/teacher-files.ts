@@ -72,14 +72,29 @@ export async function getFileStats(): Promise<FileStats> {
       return { total: 0, pending: 0, submitted: 0, overdue: 0 }
     }
 
-    const now = new Date()
-    const stats = {
-      total: data?.length || 0,
-      pending: data?.filter((file) => file.status === "pending").length || 0,
-      submitted: data?.filter((file) => file.status === "submitted").length || 0,
-      overdue:
-        data?.filter((file) => file.status === "pending" && file.due_date && new Date(file.due_date) < now).length || 0,
+    if (!data || data.length === 0) {
+      return { total: 0, pending: 0, submitted: 0, overdue: 0 }
     }
+
+    const now = new Date()
+    const stats: FileStats = {
+      total: data.length,
+      pending: 0,
+      submitted: 0,
+      overdue: 0,
+    }
+
+    data.forEach((file) => {
+      if (file.status === "submitted") {
+        stats.submitted++
+      } else if (file.status === "pending") {
+        if (file.due_date && new Date(file.due_date) < now) {
+          stats.overdue++
+        } else {
+          stats.pending++
+        }
+      }
+    })
 
     return stats
   } catch (error) {

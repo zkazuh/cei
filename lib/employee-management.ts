@@ -1,50 +1,88 @@
 import { supabase } from "./supabase"
 import type { Employee } from "./supabase"
 
-export interface EmployeeFilters {
-  search?: string
-  department?: string
-  position?: string
-  category?: string
-  status?: string
-}
-
 export interface EmployeeStats {
   total: number
-  regular: number
-  teacher: number
-  outsourced: number
   active: number
   inactive: number
+  byDepartment: Record<string, number>
+  byCategory: Record<string, number>
+  recentHires: Employee[]
 }
 
-export async function getEmployees(filters?: EmployeeFilters): Promise<Employee[]> {
+export async function getEmployeeStats(): Promise<EmployeeStats> {
   try {
-    let query = supabase.from("employees").select("*").order("name", { ascending: true })
+    const { data: employees, error } = await supabase
+      .from("employees")
+      .select("*")
+      .order("created_at", { ascending: false })
 
-    if (filters?.search) {
-      query = query.or(
-        `name.ilike.%${filters.search}%,employee_number.ilike.%${filters.search}%,email.ilike.%${filters.search}%`,
-      )
+    if (error) {
+      console.error("Error fetching employee stats:", error)
+      return {
+        total: 0,
+        active: 0,
+        inactive: 0,
+        byDepartment: {},
+        byCategory: {},
+        recentHires: [],
+      }
     }
 
-    if (filters?.department) {
-      query = query.eq("department", filters.department)
+    if (!employees || employees.length === 0) {
+      return {
+        total: 0,
+        active: 0,
+        inactive: 0,
+        byDepartment: {},
+        byCategory: {},
+        recentHires: [],
+      }
     }
 
-    if (filters?.position) {
-      query = query.eq("position", filters.position)
+    const stats: EmployeeStats = {
+      total: employees.length,
+      active: 0,
+      inactive: 0,
+      byDepartment: {},
+      byCategory: {},
+      recentHires: employees.slice(0, 5), // Get 5 most recent hires
     }
 
-    if (filters?.category) {
-      query = query.eq("category", filters.category)
-    }
+    employees.forEach((employee) => {
+      // Count by status
+      if (employee.status === "active") {
+        stats.active++
+      } else {
+        stats.inactive++
+      }
 
-    if (filters?.status) {
-      query = query.eq("status", filters.status)
-    }
+      // Count by department
+      const dept = employee.department || "Unknown"
+      stats.byDepartment[dept] = (stats.byDepartment[dept] || 0) + 1
 
-    const { data, error } = await query
+      // Count by category
+      const category = employee.category || "regular"
+      stats.byCategory[category] = (stats.byCategory[category] || 0) + 1
+    })
+
+    return stats
+  } catch (error) {
+    console.error("Error in getEmployeeStats:", error)
+    return {
+      total: 0,
+      active: 0,
+      inactive: 0,
+      byDepartment: {},
+      byCategory: {},
+      recentHires: [],
+    }
+  }
+}
+
+export async function getAllEmployees(): Promise<Employee[]> {
+  try {
+    const { data, error } = await supabase.from("employees").select("*").order("name")
 
     if (error) {
       console.error("Error fetching employees:", error)
@@ -53,49 +91,24 @@ export async function getEmployees(filters?: EmployeeFilters): Promise<Employee[
 
     return data || []
   } catch (error) {
-    console.error("Error in getEmployees:", error)
+    console.error("Error in getAllEmployees:", error)
     return []
   }
 }
 
-export async function getEmployeeStats(): Promise<EmployeeStats> {
+export async function getEmployeesByCategory(category: string): Promise<Employee[]> {
   try {
-    const { data, error } = await supabase.from("employees").select("category, status")
+    const { data, error } = await supabase.from("employees").select("*").eq("category", category).order("name")
 
     if (error) {
-      console.error("Error fetching employee stats:", error)
-      return { total: 0, regular: 0, teacher: 0, outsourced: 0, active: 0, inactive: 0 }
+      console.error("Error fetching employees by category:", error)
+      return []
     }
 
-    const stats = {
-      total: data?.length || 0,
-      regular: data?.filter((emp) => emp.category === "regular").length || 0,
-      teacher: data?.filter((emp) => emp.category === "teacher").length || 0,
-      outsourced: data?.filter((emp) => emp.category === "outsourced").length || 0,
-      active: data?.filter((emp) => emp.status === "active").length || 0,
-      inactive: data?.filter((emp) => emp.status === "inactive").length || 0,
-    }
-
-    return stats
+    return data || []
   } catch (error) {
-    console.error("Error in getEmployeeStats:", error)
-    return { total: 0, regular: 0, teacher: 0, outsourced: 0, active: 0, inactive: 0 }
-  }
-}
-
-export async function getEmployee(id: string): Promise<Employee | null> {
-  try {
-    const { data, error } = await supabase.from("employees").select("*").eq("id", id).single()
-
-    if (error) {
-      console.error("Error fetching employee:", error)
-      return null
-    }
-
-    return data
-  } catch (error) {
-    console.error("Error in getEmployee:", error)
-    return null
+    console.error("Error in getEmployeesByCategory:", error)
+    return []
   }
 }
 
@@ -115,12 +128,12 @@ export async function createEmployee(employee: Omit<Employee, "id" | "created_at
   }
 }
 
-export async function updateEmployee(id: string, updates: Partial<Employee>): Promise<boolean> {
+export async function updateEmployee(id: string, employee: Partial<Employee>): Promise<boolean> {
   try {
     const { error } = await supabase
       .from("employees")
       .update({
-        ...updates,
+        ...employee,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -153,57 +166,89 @@ export async function deleteEmployee(id: string): Promise<boolean> {
   }
 }
 
-export async function getDepartments(): Promise<string[]> {
+export async function getEmployeeById(id: string): Promise<Employee | null> {
   try {
-    const { data, error } = await supabase.from("employees").select("department").not("department", "is", null)
+    const { data, error } = await supabase.from("employees").select("*").eq("id", id).single()
 
     if (error) {
-      console.error("Error fetching departments:", error)
+      console.error("Error fetching employee by id:", error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in getEmployeeById:", error)
+    return null
+  }
+}
+
+export async function searchEmployees(query: string): Promise<Employee[]> {
+  try {
+    const { data, error } = await supabase
+      .from("employees")
+      .select("*")
+      .or(
+        `name.ilike.%${query}%,employee_number.ilike.%${query}%,department.ilike.%${query}%,position.ilike.%${query}%`,
+      )
+      .order("name")
+
+    if (error) {
+      console.error("Error searching employees:", error)
       return []
     }
 
-    const departments = [...new Set(data?.map((emp) => emp.department).filter(Boolean))]
-    return departments.sort()
+    return data || []
   } catch (error) {
-    console.error("Error in getDepartments:", error)
+    console.error("Error in searchEmployees:", error)
     return []
   }
 }
 
-export async function getPositions(): Promise<string[]> {
+export async function getEmployeesByDepartment(department: string): Promise<Employee[]> {
   try {
-    const { data, error } = await supabase.from("employees").select("position").not("position", "is", null)
+    const { data, error } = await supabase.from("employees").select("*").eq("department", department).order("name")
 
     if (error) {
-      console.error("Error fetching positions:", error)
+      console.error("Error fetching employees by department:", error)
       return []
     }
 
-    const positions = [...new Set(data?.map((emp) => emp.position).filter(Boolean))]
-    return positions.sort()
+    return data || []
   } catch (error) {
-    console.error("Error in getPositions:", error)
+    console.error("Error in getEmployeesByDepartment:", error)
     return []
   }
 }
 
-export async function bulkUpdateEmployees(
-  updates: Array<{ id: string; updates: Partial<Employee> }>,
-): Promise<boolean> {
+export async function getEmployeesByStatus(status: string): Promise<Employee[]> {
   try {
-    const promises = updates.map(({ id, updates: employeeUpdates }) =>
+    const { data, error } = await supabase.from("employees").select("*").eq("status", status).order("name")
+
+    if (error) {
+      console.error("Error fetching employees by status:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getEmployeesByStatus:", error)
+    return []
+  }
+}
+
+export async function bulkUpdateEmployees(updates: Array<{ id: string; data: Partial<Employee> }>): Promise<boolean> {
+  try {
+    const promises = updates.map(({ id, data }) =>
       supabase
         .from("employees")
         .update({
-          ...employeeUpdates,
+          ...data,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id),
     )
 
     const results = await Promise.all(promises)
-
-    // Check if any updates failed
     const hasErrors = results.some((result) => result.error)
 
     if (hasErrors) {
