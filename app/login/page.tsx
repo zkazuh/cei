@@ -8,43 +8,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/hooks/use-toast"
-import { login } from "@/lib/auth"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { signIn } from "@/lib/auth"
 import { Building2, LogIn } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
   const router = useRouter()
-  const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError("")
 
     try {
-      const user = await login(email, password)
-
+      const user = await signIn(email, password)
       if (user) {
-        toast({
-          title: "Login successful",
-          description: `Welcome back, ${user.name}!`,
-        })
         router.push("/ceiromao")
       } else {
-        toast({
-          title: "Login failed",
-          description: "Invalid email or password",
-          variant: "destructive",
-        })
+        setError("Invalid email or password")
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "An error occurred during login",
-        variant: "destructive",
-      })
+      setError("An error occurred during login")
     } finally {
       setLoading(false)
     }
@@ -55,11 +43,11 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-white" />
+            <div className="p-3 bg-blue-100 rounded-full">
+              <Building2 className="h-8 w-8 text-blue-600" />
             </div>
           </div>
-          <CardTitle className="text-2xl">Ceiromao HR Portal</CardTitle>
+          <CardTitle className="text-2xl font-bold">Ceiromao HR Portal</CardTitle>
           <CardDescription>Sign in to access your account</CardDescription>
         </CardHeader>
         <CardContent>
@@ -86,6 +74,11 @@ export default function LoginPage() {
                 required
               />
             </div>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 "Signing in..."
@@ -98,18 +91,18 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 p-4 bg-muted rounded-lg">
-            <p className="text-sm font-medium mb-2">Demo Accounts:</p>
-            <div className="text-xs space-y-1">
-              <p>
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-semibold text-sm mb-2">Demo Accounts:</h3>
+            <div className="text-xs space-y-1 text-gray-600">
+              <div>
                 <strong>Admin:</strong> admin@ceiromao.com / admin123
-              </p>
-              <p>
+              </div>
+              <div>
                 <strong>Employee:</strong> employee@ceiromao.com / emp123
-              </p>
-              <p>
+              </div>
+              <div>
                 <strong>Teacher:</strong> maria@ceiromao.com / maria123
-              </p>
+              </div>
             </div>
           </div>
         </CardContent>
