@@ -8,13 +8,7 @@ export interface TeacherFileSubmission {
 
 export async function getMonthlyRequirements(year?: number, month?: number): Promise<MonthlyFileRequirement[]> {
   try {
-    let query = supabase
-      .from("monthly_file_requirements")
-      .select(`
-        *,
-        activity_files(*)
-      `)
-      .order("due_date", { ascending: true })
+    let query = supabase.from("monthly_file_requirements").select("*").order("due_date", { ascending: true })
 
     if (year && month) {
       query = query.eq("year", year).eq("month", month)
@@ -49,9 +43,19 @@ export async function getMonthlyRequirements(year?: number, month?: number): Pro
       console.error("Error fetching users:", usersError)
     }
 
+    const { data: activityFiles, error: filesError } = await supabase
+      .from("activity_files")
+      .select("*")
+      .in("id", requirements.map((req) => req.submitted_file_id).filter(Boolean))
+
+    if (filesError) {
+      console.error("Error fetching activity files:", filesError)
+    }
+
     const enrichedRequirements = requirements.map((req) => {
       const employee = employees?.find((emp) => emp.id === req.employee_id)
       const user = employee ? users?.find((u) => u.id === employee.user_id) : null
+      const activityFile = req.submitted_file_id ? activityFiles?.find((f) => f.id === req.submitted_file_id) : null
 
       return {
         ...req,
@@ -61,6 +65,7 @@ export async function getMonthlyRequirements(year?: number, month?: number): Pro
               users: user,
             }
           : null,
+        activity_files: activityFile ? [activityFile] : [],
       }
     })
 

@@ -127,7 +127,6 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
   try {
     const reportPeriod = period || getCurrentReportPeriod()
 
-    // Get all employees - EXCLUDE OUTSOURCED from reports
     const { data: employees, error: employeesError } = await supabase
       .from("employees")
       .select(`
@@ -137,7 +136,7 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
         position,
         users!inner(name)
       `)
-      .eq("is_active", true)
+      .eq("status", "active")
       .eq("category", "regular") // Only include regular employees in reports
       .order("employee_number")
 

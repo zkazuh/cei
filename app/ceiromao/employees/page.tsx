@@ -125,9 +125,10 @@ export default function EmployeesPage() {
       filtered = filtered.filter((emp) => emp.category === categoryFilter)
     }
 
-    // Filter by status
     if (statusFilter !== "all") {
-      filtered = filtered.filter((emp) => (statusFilter === "active" ? emp.is_active : !emp.is_active))
+      filtered = filtered.filter((emp) =>
+        statusFilter === "active" ? emp.status === "active" : emp.status !== "active",
+      )
     }
 
     setFilteredEmployees(filtered)
@@ -570,8 +571,8 @@ export default function EmployeesPage() {
                       </div>
                       <div className="flex space-x-2">
                         {getCategoryBadge(employee.category)}
-                        <Badge variant={employee.is_active ? "default" : "secondary"}>
-                          {employee.is_active ? "Active" : "Inactive"}
+                        <Badge variant={employee.status === "active" ? "default" : "secondary"}>
+                          {employee.status === "active" ? "Active" : "Inactive"}
                         </Badge>
                       </div>
                     </div>
@@ -587,7 +588,7 @@ export default function EmployeesPage() {
                         <Edit className="h-4 w-4" />
                       </Button>
 
-                      {employee.is_active && (
+                      {employee.status === "active" && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button size="sm" variant="outline">
