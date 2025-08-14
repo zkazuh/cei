@@ -1,22 +1,27 @@
 "use client"
 
-import { redirect } from "next/navigation"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth-provider"
+import { Loader2 } from "lucide-react"
 
-export default function Home() {
-  const { user, isLoading } = useAuth()
+export default function HomePage() {
+  const { user, loading } = useAuth()
+  const router = useRouter()
 
-  if (!isLoading) {
-    if (user) {
-      redirect("/ceiromao")
-    } else {
-      redirect("/login")
+  useEffect(() => {
+    if (!loading) {
+      if (user) {
+        router.push("/ceiromao")
+      } else {
+        router.push("/login")
+      }
     }
-  }
+  }, [user, loading, router])
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-primary"></div>
+      <Loader2 className="h-8 w-8 animate-spin" />
     </div>
   )
 }

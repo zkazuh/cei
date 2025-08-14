@@ -42,8 +42,11 @@ export type Database = {
           id: string
           employee_number: string
           name: string
-          category: "regular" | "outsourced" | "teacher"
+          department: string | null
+          position: string | null
+          hire_date: string | null
           status: "active" | "inactive"
+          category: "regular" | "outsourced" | "teacher"
           created_at: string
           updated_at: string
         }
@@ -51,8 +54,11 @@ export type Database = {
           id?: string
           employee_number: string
           name: string
-          category?: "regular" | "outsourced" | "teacher"
+          department?: string | null
+          position?: string | null
+          hire_date?: string | null
           status?: "active" | "inactive"
+          category?: "regular" | "outsourced" | "teacher"
           created_at?: string
           updated_at?: string
         }
@@ -60,8 +66,11 @@ export type Database = {
           id?: string
           employee_number?: string
           name?: string
-          category?: "regular" | "outsourced" | "teacher"
+          department?: string | null
+          position?: string | null
+          hire_date?: string | null
           status?: "active" | "inactive"
+          category?: "regular" | "outsourced" | "teacher"
           created_at?: string
           updated_at?: string
         }
@@ -222,3 +231,4 @@ export type Employee = Database["public"]["Tables"]["employees"]["Row"]
 export type MonthlyFileRequirement = Database["public"]["Tables"]["monthly_file_requirements"]["Row"]
 export type ActivityFile = Database["public"]["Tables"]["activity_files"]["Row"]
 export type ActivityLog = Database["public"]["Tables"]["activity_logs"]["Row"]
+export type Attendance = Database["public"]["Tables"]["attendance"]["Row"]

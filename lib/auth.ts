@@ -1,64 +1,79 @@
-import { supabase } from "./supabase"
-import type { User } from "./supabase"
+// Demo users for authentication (in production, use proper password hashing)
+const DEMO_USERS = [
+  { email: "admin@ceiromao.com", password: "admin123", role: "admin", name: "Administrator" },
+  { email: "employee@ceiromao.com", password: "emp123", role: "user", name: "Employee User" },
+  { email: "maria@ceiromao.com", password: "maria123", role: "user", name: "Maria Silva" },
+  { email: "carlos@ceiromao.com", password: "carlos123", role: "user", name: "Carlos Santos" },
+  { email: "ana@ceiromao.com", password: "ana123", role: "user", name: "Ana Costa" },
+  { email: "pedro@ceiromao.com", password: "pedro123", role: "user", name: "Pedro Lima" },
+  { email: "sofia@ceiromao.com", password: "sofia123", role: "user", name: "Sofia Oliveira" },
+  { email: "joao@ceiromao.com", password: "joao123", role: "user", name: "João Pereira" },
+]
 
-export async function signIn(email: string, password: string): Promise<User | null> {
+export interface AuthUser {
+  id: string
+  email: string
+  name: string
+  role: string
+}
+
+export async function signIn(email: string, password: string): Promise<AuthUser | null> {
   try {
-    // Get user from database
-    const { data: user, error } = await supabase.from("users").select("*").eq("email", email).single()
+    // Check demo users first
+    const demoUser = DEMO_USERS.find((u) => u.email === email && u.password === password)
+    if (demoUser) {
+      const authUser: AuthUser = {
+        id: `demo-${email}`,
+        email: demoUser.email,
+        name: demoUser.name,
+        role: demoUser.role,
+      }
 
-    if (error || !user) {
-      return null
+      // Store in localStorage for persistence
+      localStorage.setItem("auth_user", JSON.stringify(authUser))
+      return authUser
     }
 
-    // For demo purposes, we'll skip bcrypt verification and use simple comparison
-    // In production, you would use: const isValid = await bcrypt.compare(password, user.password_hash)
-    const isValid =
-      (email === "admin@ceiromao.com" && password === "admin123") ||
-      (email === "employee@ceiromao.com" && password === "emp123") ||
-      (email === "maria@ceiromao.com" && password === "maria123") ||
-      (email === "carlos@ceiromao.com" && password === "carlos123") ||
-      (email === "ana@ceiromao.com" && password === "ana123") ||
-      (email === "pedro@ceiromao.com" && password === "pedro123") ||
-      (email === "sofia@ceiromao.com" && password === "sofia123")
+    // In production, you would check against the database
+    // const { data, error } = await supabase
+    //   .from("users")
+    //   .select("*")
+    //   .eq("email", email)
+    //   .single()
 
-    if (!isValid) {
-      return null
-    }
-
-    // Log the login activity
-    await supabase.from("activity_logs").insert({
-      user_id: user.id,
-      action: "LOGIN",
-      table_name: "users",
-      record_id: user.id,
-      new_values: { email, timestamp: new Date().toISOString() },
-    })
-
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      created_at: user.created_at,
-      updated_at: user.updated_at,
-    }
+    return null
   } catch (error) {
     console.error("Sign in error:", error)
     return null
   }
 }
 
-export async function signOut(userId: string) {
+export async function signOut(): Promise<void> {
   try {
-    // Log the logout activity
-    await supabase.from("activity_logs").insert({
-      user_id: userId,
-      action: "LOGOUT",
-      table_name: "users",
-      record_id: userId,
-      new_values: { timestamp: new Date().toISOString() },
-    })
+    localStorage.removeItem("auth_user")
   } catch (error) {
     console.error("Sign out error:", error)
   }
+}
+
+export function getCurrentUser(): AuthUser | null {
+  try {
+    const stored = localStorage.getItem("auth_user")
+    if (stored) {
+      return JSON.parse(stored)
+    }
+    return null
+  } catch (error) {
+    console.error("Get current user error:", error)
+    return null
+  }
+}
+
+export function isAuthenticated(): boolean {
+  return getCurrentUser() !== null
+}
+
+export function isAdmin(): boolean {
+  const user = getCurrentUser()
+  return user?.role === "admin"
 }

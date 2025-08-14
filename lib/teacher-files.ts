@@ -75,7 +75,7 @@ export async function getTeachers(): Promise<Employee[]> {
 
 export async function createMonthlyRequirements(year: number, month: number): Promise<boolean> {
   try {
-    const { error } = await supabase.rpc("create_monthly_requirements_for_teachers", {
+    const { data, error } = await supabase.rpc("create_monthly_requirements_for_teachers", {
       target_year: year,
       target_month: month,
     })
@@ -94,7 +94,7 @@ export async function createMonthlyRequirements(year: number, month: number): Pr
 
 export async function updateOverdueRequirements(): Promise<boolean> {
   try {
-    const { error } = await supabase.rpc("update_overdue_requirements")
+    const { data, error } = await supabase.rpc("update_overdue_requirements")
 
     if (error) {
       console.error("Error updating overdue requirements:", error)
@@ -110,19 +110,15 @@ export async function updateOverdueRequirements(): Promise<boolean> {
 
 export async function uploadTeacherFile(requirementId: string, file: File, employeeId: string): Promise<boolean> {
   try {
-    // First, upload the file to Supabase Storage (or handle file storage)
-    const fileName = `${Date.now()}_${file.name}`
-    const filePath = `teacher-files/${employeeId}/${fileName}`
+    // First, create the activity file record
+    const fileName = file.name
+    const filePath = `teacher-files/${employeeId}/${Date.now()}_${fileName}`
 
-    // For demo purposes, we'll simulate file upload
-    // In production, you would upload to Supabase Storage or another service
-
-    // Create activity file record
     const { data: activityFile, error: fileError } = await supabase
       .from("activity_files")
       .insert({
         employee_id: employeeId,
-        filename: file.name,
+        filename: fileName,
         file_path: filePath,
         file_size: file.size,
         mime_type: file.type,
@@ -167,9 +163,24 @@ export async function downloadTeacherFile(fileId: string): Promise<void> {
       throw new Error("File not found")
     }
 
-    // For demo purposes, we'll create a mock download
-    // In production, you would download from Supabase Storage or another service
-    const mockFileContent = `Mock file content for: ${file.filename}\nUploaded on: ${file.upload_date}\nFile size: ${file.file_size} bytes`
+    // For demo purposes, create a mock file download
+    // In production, you would download from Supabase Storage
+    const mockFileContent = `Demo File: ${file.filename}
+
+This is a demonstration file for the Ceiromao HR Portal.
+
+File Details:
+- Original Name: ${file.filename}
+- Upload Date: ${new Date(file.upload_date).toLocaleString()}
+- File Size: ${formatFileSize(file.file_size)}
+- MIME Type: ${file.mime_type}
+- Employee ID: ${file.employee_id}
+
+In a production environment, this would be the actual file content 
+downloaded from your file storage system (like Supabase Storage, AWS S3, etc.).
+
+This demo file was generated on: ${new Date().toLocaleString()}
+`
 
     const blob = new Blob([mockFileContent], { type: file.mime_type || "text/plain" })
     const url = URL.createObjectURL(blob)
