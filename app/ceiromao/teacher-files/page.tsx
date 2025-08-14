@@ -16,9 +16,22 @@ import {
   markOverdueRequirements,
   getTeacherFileStats,
   uploadTeacherFile,
+  downloadTeacherFile,
+  formatFileSize,
+  getFileIcon,
 } from "@/lib/teacher-files"
 import type { MonthlyFileRequirementWithEmployee } from "@/lib/supabase"
-import { GraduationCap, FileText, Clock, CheckCircle, AlertCircle, Plus, Download } from "lucide-react"
+import {
+  GraduationCap,
+  FileText,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Plus,
+  Download,
+  Upload,
+  Calendar,
+} from "lucide-react"
 import { format } from "date-fns"
 
 export default function TeacherFilesPage() {
@@ -31,6 +44,7 @@ export default function TeacherFilesPage() {
     status: "all",
   })
   const [uploadingFile, setUploadingFile] = useState<string | null>(null)
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null)
   const { toast } = useToast()
   const { user } = useAuth()
 
@@ -140,6 +154,43 @@ export default function TeacherFilesPage() {
     }
   }
 
+  const handleFileDownload = async (fileId: string, fileName: string) => {
+    setDownloadingFile(fileId)
+    try {
+      const downloadData = await downloadTeacherFile(fileId)
+      if (downloadData) {
+        // Create download link
+        const url = window.URL.createObjectURL(downloadData.blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = downloadData.fileName
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+
+        toast({
+          title: "Success",
+          description: `File "${fileName}" downloaded successfully`,
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to download file",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An error occurred while downloading file",
+        variant: "destructive",
+      })
+    } finally {
+      setDownloadingFile(null)
+    }
+  }
+
   const getStatusBadge = (status: string, dueDate: string) => {
     const isOverdue = new Date(dueDate) < new Date() && status === "pending"
 
@@ -155,7 +206,7 @@ export default function TeacherFilesPage() {
     switch (status) {
       case "submitted":
         return (
-          <Badge variant="default" className="flex items-center gap-1 bg-green-500">
+          <Badge variant="default" className="flex items-center gap-1 bg-green-500 hover:bg-green-600">
             <CheckCircle className="h-3 w-3" />
             Submitted
           </Badge>
@@ -174,7 +225,7 @@ export default function TeacherFilesPage() {
 
   const exportToCSV = () => {
     const csvContent = [
-      ["Employee", "Month", "Year", "Due Date", "Status", "Submitted At"].join(","),
+      ["Employee", "Month", "Year", "Due Date", "Status", "Submitted At", "File Name"].join(","),
       ...requirements.map((req) =>
         [
           req.employee?.name || "Unknown",
@@ -183,6 +234,7 @@ export default function TeacherFilesPage() {
           req.due_date,
           req.status,
           req.submitted_at || "Not submitted",
+          req.file?.file_name || "No file",
         ].join(","),
       ),
     ].join("\n")
@@ -209,7 +261,7 @@ export default function TeacherFilesPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <GraduationCap className="h-8 w-8" />
+            <GraduationCap className="h-8 w-8 text-purple-600" />
             Teacher Files
           </h1>
           <p className="text-muted-foreground">Manage monthly file submissions for teachers</p>
@@ -360,54 +412,109 @@ export default function TeacherFilesPage() {
           ) : (
             <div className="space-y-4">
               {requirements.map((requirement) => (
-                <div key={requirement.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center justify-center w-10 h-10 bg-purple-100 rounded-full">
-                      <GraduationCap className="h-5 w-5 text-purple-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">{requirement.employee?.name || "Unknown Teacher"}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(requirement.year, requirement.month - 1, 1), "MMMM yyyy")} - Due:{" "}
-                        {format(new Date(requirement.due_date), "MMM dd, yyyy")}
-                      </p>
-                      {requirement.submitted_at && (
-                        <p className="text-xs text-green-600">
-                          Submitted: {format(new Date(requirement.submitted_at), "MMM dd, yyyy HH:mm")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                <div key={requirement.id} className="border rounded-lg p-6 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-4 flex-1">
+                      <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-full">
+                        <GraduationCap className="h-6 w-6 text-purple-600" />
+                      </div>
 
-                  <div className="flex items-center space-x-4">
-                    {getStatusBadge(requirement.status, requirement.due_date)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="font-semibold text-lg">{requirement.employee?.name || "Unknown Teacher"}</h3>
+                          {getStatusBadge(requirement.status, requirement.due_date)}
+                        </div>
 
-                    {requirement.status === "pending" && (
-                      <div className="flex items-center space-x-2">
-                        <Input
-                          type="file"
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (file && requirement.employee) {
-                              handleFileUpload(requirement.id, requirement.employee.id, file)
-                            }
-                          }}
-                          disabled={uploadingFile === requirement.id}
-                          className="w-48"
-                        />
-                        {uploadingFile === requirement.id && (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground mb-3">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <span>{format(new Date(requirement.year, requirement.month - 1, 1), "MMMM yyyy")}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span>Due: {format(new Date(requirement.due_date), "MMM dd, yyyy")}</span>
+                          </div>
+                          {requirement.submitted_at && (
+                            <div className="flex items-center gap-2 text-green-600">
+                              <CheckCircle className="h-4 w-4" />
+                              <span>Submitted: {format(new Date(requirement.submitted_at), "MMM dd, yyyy HH:mm")}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* File Information */}
+                        {requirement.file && (
+                          <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">{getFileIcon(requirement.file.file_type)}</span>
+                              <span className="font-medium">{requirement.file.file_name}</span>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <span>Size: {formatFileSize(requirement.file.file_size)}</span>
+                              <span>Type: {requirement.file.file_type}</span>
+                              <span>Uploaded: {format(new Date(requirement.file.upload_date), "MMM dd, yyyy")}</span>
+                            </div>
+                          </div>
                         )}
                       </div>
-                    )}
+                    </div>
 
-                    {requirement.file && (
-                      <Button variant="outline" size="sm">
-                        <FileText className="h-4 w-4 mr-2" />
-                        View File
-                      </Button>
-                    )}
+                    {/* Action Buttons */}
+                    <div className="flex flex-col gap-2 ml-4">
+                      {requirement.status === "pending" && (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file && requirement.employee) {
+                                handleFileUpload(requirement.id, requirement.employee.id, file)
+                              }
+                            }}
+                            disabled={uploadingFile === requirement.id}
+                            className="hidden"
+                            id={`file-upload-${requirement.id}`}
+                          />
+                          <Label htmlFor={`file-upload-${requirement.id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={uploadingFile === requirement.id}
+                              className="cursor-pointer bg-transparent"
+                              asChild
+                            >
+                              <span>
+                                <Upload className="h-4 w-4 mr-2" />
+                                {uploadingFile === requirement.id ? "Uploading..." : "Upload File"}
+                              </span>
+                            </Button>
+                          </Label>
+                        </div>
+                      )}
+
+                      {requirement.file && requirement.status === "submitted" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleFileDownload(requirement.file!.id, requirement.file!.file_name)}
+                          disabled={downloadingFile === requirement.file.id}
+                          className="flex items-center gap-2"
+                        >
+                          {downloadingFile === requirement.file.id ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                              Downloading...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-4 w-4" />
+                              Download
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

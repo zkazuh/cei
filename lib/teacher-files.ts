@@ -237,11 +237,17 @@ export async function uploadTeacherFile(
   description?: string,
 ): Promise<ActivityFile | null> {
   try {
-    // For now, we'll simulate file upload by creating a record
-    // In a real implementation, you'd upload to Supabase Storage
+    // Create a unique file path
     const fileName = file.name
-    const filePath = `/teacher-files/${employeeId}/${Date.now()}-${fileName}`
+    const timestamp = Date.now()
+    const filePath = `teacher-files/${employeeId}/${timestamp}-${fileName}`
 
+    // In a real implementation, you would upload to Supabase Storage:
+    // const { data: uploadData, error: uploadError } = await supabase.storage
+    //   .from('teacher-files')
+    //   .upload(filePath, file)
+
+    // For now, we'll simulate the upload and store file metadata
     const { data, error } = await supabase
       .from("activity_files")
       .insert({
@@ -266,4 +272,82 @@ export async function uploadTeacherFile(
     console.error("Error in uploadTeacherFile:", error)
     return null
   }
+}
+
+export async function downloadTeacherFile(fileId: string): Promise<{ blob: Blob; fileName: string } | null> {
+  try {
+    // Get file information from database
+    const { data: fileData, error: fileError } = await supabase
+      .from("activity_files")
+      .select("*")
+      .eq("id", fileId)
+      .single()
+
+    if (fileError || !fileData) {
+      console.error("Error fetching file data:", fileError)
+      return null
+    }
+
+    // In a real implementation, you would download from Supabase Storage:
+    // const { data: downloadData, error: downloadError } = await supabase.storage
+    //   .from('teacher-files')
+    //   .download(fileData.file_path)
+
+    // For demo purposes, we'll create a mock file blob
+    const mockFileContent = `Mock file content for: ${fileData.file_name}
+    
+File Details:
+- Name: ${fileData.file_name}
+- Type: ${fileData.file_type}
+- Size: ${fileData.file_size} bytes
+- Upload Date: ${fileData.upload_date}
+- Description: ${fileData.description}
+
+This is a demonstration file. In a real implementation, 
+this would be the actual file content downloaded from storage.`
+
+    const blob = new Blob([mockFileContent], { type: "text/plain" })
+
+    return {
+      blob,
+      fileName: fileData.file_name,
+    }
+  } catch (error) {
+    console.error("Error in downloadTeacherFile:", error)
+    return null
+  }
+}
+
+export async function getActivityFile(fileId: string): Promise<ActivityFile | null> {
+  try {
+    const { data, error } = await supabase.from("activity_files").select("*").eq("id", fileId).single()
+
+    if (error) {
+      console.error("Error fetching activity file:", error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error in getActivityFile:", error)
+    return null
+  }
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes"
+
+  const k = 1024
+  const sizes = ["Bytes", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+
+  return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+}
+
+export function getFileIcon(fileType: string): string {
+  if (fileType.includes("pdf")) return "📄"
+  if (fileType.includes("word") || fileType.includes("document")) return "📝"
+  if (fileType.includes("image")) return "🖼️"
+  if (fileType.includes("excel") || fileType.includes("spreadsheet")) return "📊"
+  return "📎"
 }
