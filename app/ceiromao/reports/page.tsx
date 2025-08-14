@@ -1,142 +1,171 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Download, FileText, Users } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useToast } from "@/hooks/use-toast"
 import {
   getMonthlyAttendanceReport,
   generateReportPeriods,
   getCurrentReportPeriod,
-  getAvailableYears,
   formatReportDate,
   getReportPeriodTitle,
+  getAvailableYears,
   type AttendanceReportData,
   type ReportPeriod,
 } from "@/lib/reports"
-
-const attendanceCodeLabels = {
-  C: "Present",
-  F: "Absent",
-  A: "Medical Leave",
-  AF: "Justified Absent",
-  CR: "Course",
-  RE: "Recess",
-  R: "Meeting",
-}
-
-const attendanceCodeColors = {
-  C: "bg-green-100 text-green-800",
-  F: "bg-red-100 text-red-800",
-  A: "bg-blue-100 text-blue-800",
-  AF: "bg-yellow-100 text-yellow-800",
-  CR: "bg-purple-100 text-purple-800",
-  RE: "bg-orange-100 text-orange-800",
-  R: "bg-indigo-100 text-indigo-800",
-}
+import { BarChart3, Download, Calendar, Users, FileText } from "lucide-react"
 
 export default function ReportsPage() {
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
-  const [selectedPeriod, setSelectedPeriod] = useState<ReportPeriod | null>(null)
   const [reportData, setReportData] = useState<AttendanceReportData[]>([])
-  const [loading, setLoading] = useState(false)
-  const [availableYears] = useState(getAvailableYears())
+  const [reportPeriod, setReportPeriod] = useState<ReportPeriod>(getCurrentReportPeriod())
+  const [availableYears, setAvailableYears] = useState<number[]>([])
   const [availablePeriods, setAvailablePeriods] = useState<ReportPeriod[]>([])
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+  const [selectedPeriodIndex, setSelectedPeriodIndex] = useState<number>(0)
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
 
-  // Initialize periods and current period
+  useEffect(() => {
+    const years = getAvailableYears()
+    setAvailableYears(years)
+
+    const currentPeriod = getCurrentReportPeriod()
+    setSelectedYear(currentPeriod.year)
+    setSelectedPeriodIndex(currentPeriod.monthIndex)
+  }, [])
+
   useEffect(() => {
     const periods = generateReportPeriods(selectedYear)
     setAvailablePeriods(periods)
 
-    if (!selectedPeriod) {
-      const currentPeriod = getCurrentReportPeriod()
-      setSelectedPeriod(currentPeriod)
+    if (periods[selectedPeriodIndex]) {
+      setReportPeriod(periods[selectedPeriodIndex])
     }
-  }, [selectedYear, selectedPeriod])
+  }, [selectedYear, selectedPeriodIndex])
 
-  // Load report data when period changes
   useEffect(() => {
-    if (selectedPeriod) {
-      loadReportData(selectedPeriod)
-    }
-  }, [selectedPeriod])
+    loadReportData()
+  }, [reportPeriod])
 
-  const loadReportData = async (period: ReportPeriod) => {
-    setLoading(true)
+  const loadReportData = async () => {
     try {
-      const { employees } = await getMonthlyAttendanceReport(period)
+      setLoading(true)
+      const { employees } = await getMonthlyAttendanceReport(reportPeriod)
       setReportData(employees)
     } catch (error) {
       console.error("Error loading report data:", error)
-      setReportData([])
+      toast({
+        title: "Error",
+        description: "Failed to load report data",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  const handleYearChange = (year: string) => {
-    const yearNum = Number.parseInt(year)
-    setSelectedYear(yearNum)
-    setSelectedPeriod(null) // Reset period selection
-  }
-
-  const handlePeriodChange = (periodIndex: string) => {
-    const period = availablePeriods[Number.parseInt(periodIndex)]
-    setSelectedPeriod(period)
-  }
-
   const exportToCSV = () => {
-    if (!selectedPeriod || reportData.length === 0) return
+    try {
+      // Generate CSV headers
+      const dates = []
+      const currentDate = new Date(reportPeriod.startDate)
+      const endDate = new Date(reportPeriod.endDate)
 
-    const headers = ["Employee", "Employee Number", "Department", "Position"]
-    const dates: string[] = []
+      while (currentDate <= endDate) {
+        dates.push(currentDate.toISOString().split("T")[0])
+        currentDate.setDate(currentDate.getDate() + 1)
+      }
 
-    // Get all dates in the period
-    const currentDate = new Date(selectedPeriod.startDate)
-    const endDate = new Date(selectedPeriod.endDate)
+      const headers = [
+        "Employee Number",
+        "Name",
+        "Department",
+        "Position",
+        ...dates.map((date) => formatReportDate(date)),
+      ]
 
-    while (currentDate <= endDate) {
-      dates.push(currentDate.toISOString().split("T")[0])
-      currentDate.setDate(currentDate.getDate() + 1)
-    }
-
-    headers.push(...dates.map(formatReportDate))
-
-    const csvContent = [
-      headers.join(","),
-      ...reportData.map((employee) => {
+      // Generate CSV rows
+      const rows = reportData.map((employee) => {
         const row = [
-          employee.employee.name,
           employee.employee.employee_number,
+          employee.employee.name,
           employee.employee.department,
           employee.employee.position,
         ]
 
         dates.forEach((date) => {
           const attendance = employee.attendance[date]
-          const code = attendance?.merged || `${attendance?.morning || "F"}/${attendance?.afternoon || "F"}`
-          row.push(code)
+          if (attendance?.merged) {
+            row.push(attendance.merged)
+          } else if (attendance?.morning && attendance?.afternoon) {
+            row.push(`${attendance.morning}/${attendance.afternoon}`)
+          } else if (attendance?.morning) {
+            row.push(attendance.morning)
+          } else {
+            row.push("F")
+          }
         })
 
-        return row.join(",")
-      }),
-    ].join("\n")
+        return row
+      })
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `attendance-report-${selectedPeriod.label}-${selectedPeriod.year}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
+      // Create CSV content
+      const csvContent = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n")
+
+      // Download CSV
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const link = document.createElement("a")
+      const url = URL.createObjectURL(blob)
+      link.setAttribute("href", url)
+      link.setAttribute(
+        "download",
+        `attendance_report_${getReportPeriodTitle(reportPeriod).replace(/[^a-zA-Z0-9]/g, "_")}.csv`,
+      )
+      link.style.visibility = "hidden"
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast({
+        title: "Success",
+        description: "Report exported successfully",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to export report",
+        variant: "destructive",
+      })
+    }
   }
 
-  const getDatesInPeriod = (period: ReportPeriod): string[] => {
-    const dates: string[] = []
-    const currentDate = new Date(period.startDate)
-    const endDate = new Date(period.endDate)
+  const getAttendanceCodeBadge = (code: string) => {
+    const codeMap = {
+      C: { label: "Present", variant: "default" as const, className: "bg-green-100 text-green-800" },
+      F: { label: "Absent", variant: "destructive" as const, className: "bg-red-100 text-red-800" },
+      A: { label: "Medical", variant: "secondary" as const, className: "bg-blue-100 text-blue-800" },
+      AF: { label: "Justified", variant: "secondary" as const, className: "bg-yellow-100 text-yellow-800" },
+      CR: { label: "Course", variant: "outline" as const, className: "bg-purple-100 text-purple-800" },
+      RE: { label: "Recess", variant: "outline" as const, className: "bg-gray-100 text-gray-800" },
+      R: { label: "Meeting", variant: "outline" as const, className: "bg-indigo-100 text-indigo-800" },
+    }
+
+    const config = codeMap[code as keyof typeof codeMap] || { label: code, variant: "outline" as const, className: "" }
+
+    return (
+      <Badge variant={config.variant} className={`text-xs ${config.className}`}>
+        {config.label}
+      </Badge>
+    )
+  }
+
+  const generateDateColumns = () => {
+    const dates = []
+    const currentDate = new Date(reportPeriod.startDate)
+    const endDate = new Date(reportPeriod.endDate)
 
     while (currentDate <= endDate) {
       dates.push(currentDate.toISOString().split("T")[0])
@@ -146,37 +175,48 @@ export default function ReportsPage() {
     return dates
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading report...</div>
+      </div>
+    )
+  }
+
+  const dateColumns = generateDateColumns()
+
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Attendance Reports</h1>
-          <p className="text-muted-foreground">Generate and export monthly attendance reports</p>
+          <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
+          <p className="text-gray-600">Generate and export attendance reports</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Calendar className="h-5 w-5" />
-          <span className="text-sm text-muted-foreground">
-            {selectedPeriod ? getReportPeriodTitle(selectedPeriod) : "Select Period"}
-          </span>
-        </div>
+        <Button onClick={exportToCSV}>
+          <Download className="h-4 w-4 mr-2" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Report Controls */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Report Configuration
+            <Calendar className="h-5 w-5" />
+            Report Period
           </CardTitle>
-          <CardDescription>Select the year and period for the attendance report</CardDescription>
+          <CardDescription>Select the period for the attendance report</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Year</label>
-              <Select value={selectedYear.toString()} onValueChange={handleYearChange}>
+              <Select
+                value={selectedYear.toString()}
+                onValueChange={(value) => setSelectedYear(Number.parseInt(value))}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select year" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {availableYears.map((year) => (
@@ -187,15 +227,14 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <label className="text-sm font-medium">Period</label>
               <Select
-                value={selectedPeriod ? availablePeriods.indexOf(selectedPeriod).toString() : ""}
-                onValueChange={handlePeriodChange}
+                value={selectedPeriodIndex.toString()}
+                onValueChange={(value) => setSelectedPeriodIndex(Number.parseInt(value))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select period" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {availablePeriods.map((period, index) => (
@@ -206,155 +245,153 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Actions</label>
-              <Button
-                onClick={exportToCSV}
-                disabled={!selectedPeriod || reportData.length === 0 || loading}
-                className="w-full"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export CSV
-              </Button>
-            </div>
+          </div>
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-medium text-gray-900">Selected Period</h3>
+            <p className="text-sm text-gray-600">
+              {getReportPeriodTitle(reportPeriod)} ({formatReportDate(reportPeriod.startDate)} to{" "}
+              {formatReportDate(reportPeriod.endDate)})
+            </p>
           </div>
         </CardContent>
       </Card>
 
       {/* Report Summary */}
-      {selectedPeriod && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-blue-600" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Employees</p>
-                  <p className="text-2xl font-bold">{reportData.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-green-600" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Report Period</p>
-                  <p className="text-lg font-semibold">{getReportPeriodTitle(selectedPeriod)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-purple-600" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Working Days</p>
-                  <p className="text-2xl font-bold">{getDatesInPeriod(selectedPeriod).length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Attendance Report Table */}
-      {selectedPeriod && (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Attendance Report - {getReportPeriodTitle(selectedPeriod)}</CardTitle>
-            <CardDescription>Daily attendance tracking for all regular employees</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                  <p className="text-sm text-muted-foreground">Loading report data...</p>
-                </div>
-              </div>
-            ) : reportData.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">No data available for the selected period</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-200">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="border border-gray-200 p-2 text-left font-medium">Employee</th>
-                      <th className="border border-gray-200 p-2 text-left font-medium">Number</th>
-                      <th className="border border-gray-200 p-2 text-left font-medium">Department</th>
-                      {getDatesInPeriod(selectedPeriod).map((date) => (
-                        <th key={date} className="border border-gray-200 p-1 text-center font-medium text-xs">
-                          {formatReportDate(date)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reportData.map((employee) => (
-                      <tr key={employee.employee.id} className="hover:bg-gray-50">
-                        <td className="border border-gray-200 p-2 font-medium">{employee.employee.name}</td>
-                        <td className="border border-gray-200 p-2 text-sm">{employee.employee.employee_number}</td>
-                        <td className="border border-gray-200 p-2 text-sm">{employee.employee.department}</td>
-                        {getDatesInPeriod(selectedPeriod).map((date) => {
-                          const attendance = employee.attendance[date]
-                          const code =
-                            attendance?.merged ||
-                            (attendance?.morning === attendance?.afternoon
-                              ? attendance?.morning
-                              : `${attendance?.morning || "F"}/${attendance?.afternoon || "F"}`)
-
-                          return (
-                            <td key={date} className="border border-gray-200 p-1 text-center">
-                              {code && code.length <= 2 ? (
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-xs ${attendanceCodeColors[code as keyof typeof attendanceCodeColors] || "bg-gray-100 text-gray-800"}`}
-                                >
-                                  {code}
-                                </Badge>
-                              ) : (
-                                <span className="text-xs font-mono">{code}</span>
-                              )}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <div className="text-2xl font-bold">{reportData.length}</div>
+            <p className="text-xs text-muted-foreground">In this report</p>
           </CardContent>
         </Card>
-      )}
 
-      {/* Legend */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Report Period</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{dateColumns.length}</div>
+            <p className="text-xs text-muted-foreground">Days covered</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Report Type</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">Monthly</div>
+            <p className="text-xs text-muted-foreground">Attendance report</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Attendance Legend */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Attendance Codes</CardTitle>
+          <CardTitle>Attendance Codes</CardTitle>
+          <CardDescription>Legend for attendance status codes</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {Object.entries(attendanceCodeLabels).map(([code, label]) => (
-              <div key={code} className="flex items-center gap-2">
-                <Badge
-                  variant="secondary"
-                  className={`text-xs ${attendanceCodeColors[code as keyof typeof attendanceCodeColors]}`}
-                >
-                  {code}
-                </Badge>
-                <span className="text-sm">{label}</span>
-              </div>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            {getAttendanceCodeBadge("C")}
+            {getAttendanceCodeBadge("F")}
+            {getAttendanceCodeBadge("A")}
+            {getAttendanceCodeBadge("AF")}
+            {getAttendanceCodeBadge("CR")}
+            {getAttendanceCodeBadge("RE")}
+            {getAttendanceCodeBadge("R")}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Attendance Report Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Attendance Report - {getReportPeriodTitle(reportPeriod)}
+          </CardTitle>
+          <CardDescription>Monthly attendance report showing daily attendance for all employees</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {reportData.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">No attendance data found for this period.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border border-gray-300">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-300 px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Employee
+                    </th>
+                    <th className="border border-gray-300 px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Department
+                    </th>
+                    {dateColumns.map((date) => (
+                      <th
+                        key={date}
+                        className="border border-gray-300 px-1 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        {formatReportDate(date)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {reportData.map((employee) => (
+                    <tr key={employee.employee.id} className="hover:bg-gray-50">
+                      <td className="border border-gray-300 px-2 py-2 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{employee.employee.name}</div>
+                          <div className="text-sm text-gray-500">{employee.employee.employee_number}</div>
+                        </div>
+                      </td>
+                      <td className="border border-gray-300 px-2 py-2 whitespace-nowrap text-sm text-gray-900">
+                        {employee.employee.department}
+                      </td>
+                      {dateColumns.map((date) => {
+                        const attendance = employee.attendance[date]
+                        let displayCode = "F"
+
+                        if (attendance?.merged) {
+                          displayCode = attendance.merged
+                        } else if (attendance?.morning && attendance?.afternoon) {
+                          if (attendance.morning === attendance.afternoon) {
+                            displayCode = attendance.morning
+                          } else {
+                            displayCode = `${attendance.morning}/${attendance.afternoon}`
+                          }
+                        } else if (attendance?.morning) {
+                          displayCode = attendance.morning
+                        }
+
+                        return (
+                          <td key={date} className="border border-gray-300 px-1 py-2 text-center">
+                            {displayCode.includes("/") ? (
+                              <div className="flex flex-col gap-1">
+                                {displayCode.split("/").map((code, index) => (
+                                  <div key={index}>{getAttendanceCodeBadge(code)}</div>
+                                ))}
+                              </div>
+                            ) : (
+                              getAttendanceCodeBadge(displayCode)
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

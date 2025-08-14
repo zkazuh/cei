@@ -5,7 +5,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Types
 export interface User {
   id: string
   email: string
@@ -20,14 +19,16 @@ export interface Employee {
   user_id?: string
   employee_number: string
   name: string
-  position: string
-  department: string
+  department?: string
+  position?: string
   hire_date: string
-  status: string
-  category: string
+  status: "active" | "inactive"
+  category: "regular" | "teacher" | "outsourced"
+  phone?: string
+  email?: string
+  address?: string
   created_at: string
   updated_at: string
-  users?: User
 }
 
 export interface Attendance {
@@ -36,18 +37,19 @@ export interface Attendance {
   date: string
   period: "morning" | "afternoon"
   status: "present" | "absent" | "late"
-  marked_by: string
+  marked_by?: string
   created_at: string
   updated_at: string
+  employees?: Employee
   attendance_justifications?: AttendanceJustification[]
 }
 
 export interface AttendanceJustification {
   id: string
   attendance_id: string
-  justification_type: string
-  justification_text: string
-  created_by: string
+  justification_type: "medical" | "justified" | "banked_hours" | "other" | "course" | "recess" | "meeting"
+  justification_text?: string
+  created_by?: string
   created_at: string
   updated_at: string
 }
@@ -56,19 +58,39 @@ export interface ActivityFile {
   id: string
   employee_id: string
   file_name: string
-  file_type: string
+  file_path?: string
+  file_size?: number
+  file_type?: string
   requirement_type: string
-  due_date?: string
-  status: string
+  month: number
+  year: number
+  due_date: string
+  status: "pending" | "submitted" | "approved" | "rejected"
   submitted_at?: string
+  submitted_by?: string
   created_at: string
   updated_at: string
 }
 
 export interface ActivityLog {
   id: string
-  user_id: string
+  user_id?: string
   action: string
-  details?: string
+  table_name?: string
+  record_id?: string
+  old_values?: any
+  new_values?: any
   created_at: string
+}
+
+export interface MonthlyFileRequirement {
+  id: string
+  employee_id: string
+  month: number
+  year: number
+  due_date: string
+  status: "pending" | "submitted" | "overdue"
+  submitted_at?: string
+  created_at: string
+  updated_at: string
 }

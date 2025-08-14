@@ -20,7 +20,7 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg">Loading...</div>
       </div>
     )

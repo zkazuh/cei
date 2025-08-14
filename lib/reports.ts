@@ -12,7 +12,7 @@ export interface AttendanceReportData {
     [date: string]: {
       morning?: "C" | "F" | "A" | "AF" | "CR" | "RE" | "R"
       afternoon?: "C" | "F" | "A" | "AF" | "CR" | "RE" | "R"
-      merged?: "C" | "F" | "A" | "AF" | "CR" | "RE" | "R" // When both periods have same status
+      merged?: "C" | "F" | "A" | "AF" | "CR" | "RE" | "R"
     }
   }
 }
@@ -47,7 +47,6 @@ export function generateReportPeriods(year: number): ReportPeriod[] {
     const startMonth = month
     const endMonth = month + 1
 
-    // Handle year transition for December to January
     const startYear = year
     const endYear = endMonth > 11 ? year + 1 : year
     const actualEndMonth = endMonth > 11 ? 0 : endMonth
@@ -78,8 +77,6 @@ export function getCurrentReportPeriod(): ReportPeriod {
   const currentMonth = today.getMonth()
   const currentDay = today.getDate()
 
-  // If we're before the 11th, we're in the previous period
-  // If we're on or after the 11th, we're in the current period
   let periodMonth = currentMonth
   let periodYear = currentYear
 
@@ -99,25 +96,22 @@ function getAttendanceCode(
   status: "present" | "absent" | "late",
   justificationType?: "medical" | "justified" | "banked_hours" | "other" | "course" | "recess" | "meeting",
 ): "C" | "F" | "A" | "AF" | "CR" | "RE" | "R" {
-  if (status === "present") {
-    return "C" // Present
-  } else if (status === "late") {
-    return "C" // Late but present - count as present
+  if (status === "present" || status === "late") {
+    return "C" // Present (including late)
   } else {
-    // Absent - check justification type
     switch (justificationType) {
       case "medical":
-        return "A" // Medical Leave
+        return "A"
       case "justified":
-        return "AF" // Justified Absent
+        return "AF"
       case "course":
-        return "CR" // Course
+        return "CR"
       case "recess":
-        return "RE" // Recess
+        return "RE"
       case "meeting":
-        return "R" // Meeting
+        return "R"
       default:
-        return "F" // Absent (no justification)
+        return "F"
     }
   }
 }
@@ -129,7 +123,7 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
   try {
     const reportPeriod = period || getCurrentReportPeriod()
 
-    // Get all employees - EXCLUDE OUTSOURCED from reports
+    // Get all employees - Include both teachers and regular employees, exclude outsourced
     const { data: employees, error: employeesError } = await supabase
       .from("employees")
       .select(`
@@ -139,8 +133,8 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
         department,
         position
       `)
-      .eq("status", "active") // Use status instead of is_active
-      .eq("category", "regular") // Only include regular employees in reports
+      .eq("status", "active")
+      .in("category", ["regular", "teacher"]) // Include both regular and teacher employees
       .order("employee_number")
 
     if (employeesError) {
@@ -148,39 +142,18 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
       return { reportPeriod, employees: [] }
     }
 
-    // Fetch attendance with graceful fallback
-    const baseSelect = `
+    // Fetch attendance data
+    const { data: attendanceData, error: attendanceError } = await supabase
+      .from("attendance")
+      .select(`
         employee_id,
         date,
         status,
+        period,
         attendance_justifications(justification_type)
-      ` as const
-
-    // Try with `period` first (the new column)
-    let attendanceSelect = `${baseSelect}, period`
-    let { data: attendanceData, error: attendanceError } = await supabase
-      .from("attendance")
-      .select(attendanceSelect)
+      `)
       .gte("date", reportPeriod.startDate)
       .lte("date", reportPeriod.endDate)
-
-    // If the column doesn't exist, retry without it and treat everything as morning
-    if (attendanceError && /period/.test(attendanceError.message)) {
-      console.warn(
-        "[attendance-report] The `period` column is missing. Falling back to single-period mode. " +
-          "Run scripts/016_update_attendance_structure.sql to add it.",
-      )
-
-      attendanceSelect = baseSelect
-      ;({ data: attendanceData, error: attendanceError } = await supabase
-        .from("attendance")
-        .select(attendanceSelect)
-        .gte("date", reportPeriod.startDate)
-        .lte("date", reportPeriod.endDate))
-
-      // When period is missing, we'll consider every record as morning
-      attendanceData = (attendanceData || []).map((rec: any) => ({ ...rec, period: "morning" }))
-    }
 
     if (attendanceError) {
       console.error("Error fetching attendance:", attendanceError)
@@ -212,7 +185,7 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
           const justification = morningRecord.attendance_justifications?.[0]
           attendance[dateStr].morning = getAttendanceCode(morningRecord.status, justification?.justification_type)
         } else {
-          attendance[dateStr].morning = "F" // No record means absent
+          attendance[dateStr].morning = "F"
         }
 
         // Process afternoon attendance
@@ -220,7 +193,7 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
           const justification = afternoonRecord.attendance_justifications?.[0]
           attendance[dateStr].afternoon = getAttendanceCode(afternoonRecord.status, justification?.justification_type)
         } else {
-          attendance[dateStr].afternoon = "F" // No record means absent
+          attendance[dateStr].afternoon = "F"
         }
 
         // Check if both periods have the same status - if so, merge them
@@ -229,7 +202,6 @@ export async function getMonthlyAttendanceReport(period?: ReportPeriod): Promise
 
         if (morningStatus && afternoonStatus && morningStatus === afternoonStatus) {
           attendance[dateStr].merged = morningStatus
-          // Keep individual periods for reference but they won't be displayed
         }
 
         currentDate.setDate(currentDate.getDate() + 1)
@@ -271,7 +243,6 @@ export function getAvailableYears(): number[] {
   const currentYear = new Date().getFullYear()
   const years = []
 
-  // Show 2 years before current year to 2 years after
   for (let year = currentYear - 2; year <= currentYear + 2; year++) {
     years.push(year)
   }

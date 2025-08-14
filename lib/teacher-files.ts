@@ -71,6 +71,7 @@ export async function updateFileStatus(fileId: string, status: string): Promise<
       .update({
         status,
         submitted_at: status === "submitted" ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", fileId)
 
@@ -101,5 +102,40 @@ export async function createFileRequirement(
   } catch (error) {
     console.error("Error in createFileRequirement:", error)
     return false
+  }
+}
+
+export async function uploadFile(
+  file: File,
+  employeeId: string,
+  requirementType: string,
+  month: number,
+  year: number,
+): Promise<string | null> {
+  try {
+    // In a real implementation, you would upload to Supabase Storage or another service
+    // For demo purposes, we'll simulate file upload
+    const fileName = `${employeeId}_${requirementType}_${month}_${year}_${file.name}`
+    const filePath = `uploads/${fileName}`
+
+    // Simulate file upload delay
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    return filePath
+  } catch (error) {
+    console.error("Error uploading file:", error)
+    return null
+  }
+}
+
+export async function downloadFile(filePath: string): Promise<Blob | null> {
+  try {
+    // In a real implementation, you would download from Supabase Storage
+    // For demo purposes, we'll create a dummy file
+    const content = `Demo file content for ${filePath}`
+    return new Blob([content], { type: "text/plain" })
+  } catch (error) {
+    console.error("Error downloading file:", error)
+    return null
   }
 }

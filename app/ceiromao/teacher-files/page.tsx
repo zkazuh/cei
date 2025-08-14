@@ -6,10 +6,40 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { getTeacherFiles, getFileStats, updateFileStatus } from "@/lib/teacher-files"
+import {
+  getTeacherFiles,
+  getFileStats,
+  updateFileStatus,
+  uploadFile,
+  downloadFile,
+  createFileRequirement,
+} from "@/lib/teacher-files"
+import { getEmployees } from "@/lib/employee-management"
 import type { ActivityFile, Employee } from "@/lib/supabase"
-import { FileText, Search, Filter, Calendar, User, AlertTriangle, CheckCircle, Clock, Download } from "lucide-react"
+import {
+  FileText,
+  Search,
+  Filter,
+  Calendar,
+  User,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Download,
+  Upload,
+  Plus,
+} from "lucide-react"
 
 interface TeacherFileWithEmployee extends ActivityFile {
   employees: Employee
@@ -18,6 +48,7 @@ interface TeacherFileWithEmployee extends ActivityFile {
 export default function TeacherFilesPage() {
   const [files, setFiles] = useState<TeacherFileWithEmployee[]>([])
   const [filteredFiles, setFilteredFiles] = useState<TeacherFileWithEmployee[]>([])
+  const [teachers, setTeachers] = useState<Employee[]>([])
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -30,6 +61,13 @@ export default function TeacherFilesPage() {
     requirementType: "all",
   })
   const [loading, setLoading] = useState(true)
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
+  const [isCreateRequirementDialogOpen, setIsCreateRequirementDialogOpen] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState<File | null>(null)
+  const [selectedEmployee, setSelectedEmployee] = useState("")
+  const [requirementType, setRequirementType] = useState("")
+  const [selectedMonth, setSelectedMonth] = useState("")
+  const [selectedYear, setSelectedYear] = useState("")
   const { toast } = useToast()
 
   useEffect(() => {
@@ -42,9 +80,14 @@ export default function TeacherFilesPage() {
 
   const loadData = async () => {
     try {
-      const [filesData, statsData] = await Promise.all([getTeacherFiles(), getFileStats()])
+      const [filesData, statsData, teachersData] = await Promise.all([
+        getTeacherFiles(),
+        getFileStats(),
+        getEmployees({ category: "teacher" }),
+      ])
       setFiles(filesData)
       setStats(statsData)
+      setTeachers(teachersData)
     } catch (error) {
       console.error("Error loading teacher files:", error)
       toast({
@@ -112,6 +155,159 @@ export default function TeacherFilesPage() {
     }
   }
 
+  const handleFileUpload = async () => {
+    if (!uploadingFile || !selectedEmployee || !requirementType || !selectedMonth || !selectedYear) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const filePath = await uploadFile(
+        uploadingFile,
+        selectedEmployee,
+        requirementType,
+        Number.parseInt(selectedMonth),
+        Number.parseInt(selectedYear),
+      )
+      if (filePath) {
+        // Create file record in database
+        const dueDate = new Date(Number.parseInt(selectedYear), Number.parseInt(selectedMonth), 10)
+          .toISOString()
+          .split("T")[0]
+        await createFileRequirement({
+          employee_id: selectedEmployee,
+          file_name: uploadingFile.name,
+          file_path: filePath,
+          file_size: uploadingFile.size,
+          file_type: uploadingFile.type,
+          requirement_type: requirementType,
+          month: Number.parseInt(selectedMonth),
+          year: Number.parseInt(selectedYear),
+          due_date: dueDate,
+          status: "submitted",
+          submitted_at: new Date().toISOString(),
+        })
+
+        toast({
+          title: "Success",
+          description: "File uploaded successfully",
+        })
+        setIsUploadDialogOpen(false)
+        setUploadingFile(null)
+        setSelectedEmployee("")
+        setRequirementType("")
+        setSelectedMonth("")
+        setSelectedYear("")
+        await loadData()
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to upload file",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to upload file",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleFileDownload = async (file: TeacherFileWithEmployee) => {
+    try {
+      if (file.file_path) {
+        const blob = await downloadFile(file.file_path)
+        if (blob) {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement("a")
+          a.href = url
+          a.download = file.file_name
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to download file",
+            variant: "destructive",
+          })
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: "File not available for download",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to download file",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleCreateRequirement = async () => {
+    if (!selectedEmployee || !requirementType || !selectedMonth || !selectedYear) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const dueDate = new Date(Number.parseInt(selectedYear), Number.parseInt(selectedMonth), 10)
+        .toISOString()
+        .split("T")[0]
+      const fileName = `${requirementType}_${selectedMonth}_${selectedYear}.pdf`
+
+      const success = await createFileRequirement({
+        employee_id: selectedEmployee,
+        file_name: fileName,
+        requirement_type: requirementType,
+        month: Number.parseInt(selectedMonth),
+        year: Number.parseInt(selectedYear),
+        due_date: dueDate,
+        status: "pending",
+      })
+
+      if (success) {
+        toast({
+          title: "Success",
+          description: "File requirement created successfully",
+        })
+        setIsCreateRequirementDialogOpen(false)
+        setSelectedEmployee("")
+        setRequirementType("")
+        setSelectedMonth("")
+        setSelectedYear("")
+        await loadData()
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to create file requirement",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create file requirement",
+        variant: "destructive",
+      })
+    }
+  }
+
   const getStatusBadge = (file: TeacherFileWithEmployee) => {
     const now = new Date()
     const isOverdue = file.status === "pending" && file.due_date && new Date(file.due_date) < now
@@ -150,6 +346,23 @@ export default function TeacherFilesPage() {
     return types.sort()
   }
 
+  const months = [
+    { value: "1", label: "January" },
+    { value: "2", label: "February" },
+    { value: "3", label: "March" },
+    { value: "4", label: "April" },
+    { value: "5", label: "May" },
+    { value: "6", label: "June" },
+    { value: "7", label: "July" },
+    { value: "8", label: "August" },
+    { value: "9", label: "September" },
+    { value: "10", label: "October" },
+    { value: "11", label: "November" },
+    { value: "12", label: "December" },
+  ]
+
+  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i)
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -160,9 +373,29 @@ export default function TeacherFilesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Teacher Files</h1>
-        <p className="text-gray-600">Manage teacher file requirements and submissions</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Teacher Files</h1>
+          <p className="text-gray-600">Manage teacher file requirements and submissions</p>
+        </div>
+        <div className="flex gap-2">
+          <Dialog open={isCreateRequirementDialogOpen} onOpenChange={setIsCreateRequirementDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Requirement
+              </Button>
+            </DialogTrigger>
+          </Dialog>
+          <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Upload className="h-4 w-4 mr-2" />
+                Upload File
+              </Button>
+            </DialogTrigger>
+          </Dialog>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -323,7 +556,7 @@ export default function TeacherFilesPage() {
                           Mark Pending
                         </Button>
                       )}
-                      <Button size="sm" variant="outline">
+                      <Button size="sm" variant="outline" onClick={() => handleFileDownload(file)}>
                         <Download className="h-4 w-4" />
                       </Button>
                     </div>
@@ -334,6 +567,161 @@ export default function TeacherFilesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Upload File Dialog */}
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Upload Teacher File</DialogTitle>
+          <DialogDescription>Upload a file for a teacher's monthly requirement</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="teacher">Teacher</Label>
+            <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select teacher" />
+              </SelectTrigger>
+              <SelectContent>
+                {teachers.map((teacher) => (
+                  <SelectItem key={teacher.id} value={teacher.id}>
+                    {teacher.name} ({teacher.employee_number})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="requirement_type">Requirement Type</Label>
+            <Input
+              id="requirement_type"
+              value={requirementType}
+              onChange={(e) => setRequirementType(e.target.value)}
+              placeholder="e.g., Monthly Activity Report"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="month">Month</Label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((month) => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="year">Year</Label>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="file">File</Label>
+            <Input
+              id="file"
+              type="file"
+              onChange={(e) => setUploadingFile(e.target.files?.[0] || null)}
+              accept=".pdf,.doc,.docx"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsUploadDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleFileUpload}>Upload File</Button>
+        </DialogFooter>
+      </DialogContent>
+
+      {/* Create Requirement Dialog */}
+      <Dialog open={isCreateRequirementDialogOpen} onOpenChange={setIsCreateRequirementDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create File Requirement</DialogTitle>
+            <DialogDescription>Create a new file requirement for a teacher</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="req_teacher">Teacher</Label>
+              <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select teacher" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teachers.map((teacher) => (
+                    <SelectItem key={teacher.id} value={teacher.id}>
+                      {teacher.name} ({teacher.employee_number})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="req_requirement_type">Requirement Type</Label>
+              <Input
+                id="req_requirement_type"
+                value={requirementType}
+                onChange={(e) => setRequirementType(e.target.value)}
+                placeholder="e.g., Monthly Activity Report"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="req_month">Month</Label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {months.map((month) => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="req_year">Year</Label>
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateRequirementDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateRequirement}>Create Requirement</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

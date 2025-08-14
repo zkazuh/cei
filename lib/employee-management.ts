@@ -75,7 +75,15 @@ export async function createEmployee(
 
 export async function updateEmployee(id: string, updates: Partial<Employee>): Promise<Employee | null> {
   try {
-    const { data, error } = await supabase.from("employees").update(updates).eq("id", id).select().single()
+    const { data, error } = await supabase
+      .from("employees")
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single()
 
     if (error) {
       console.error("Error updating employee:", error)
@@ -141,19 +149,16 @@ export async function getEmployeeStats(): Promise<{
     }
 
     employees?.forEach((employee) => {
-      // Status counts
       if (employee.status === "active") {
         stats.active++
       } else {
         stats.inactive++
       }
 
-      // Department counts
       if (employee.department) {
         stats.byDepartment[employee.department] = (stats.byDepartment[employee.department] || 0) + 1
       }
 
-      // Category counts
       if (employee.category) {
         stats.byCategory[employee.category] = (stats.byCategory[employee.category] || 0) + 1
       }

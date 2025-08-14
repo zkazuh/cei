@@ -1,55 +1,52 @@
-import { supabase } from "./supabase"
-import type { User } from "./supabase"
+export interface AuthUser {
+  id: string
+  email: string
+  name: string
+  role: string
+}
 
-export async function signIn(email: string, password: string): Promise<User | null> {
+// Demo authentication - replace with real auth in production
+export async function login(email: string, password: string): Promise<AuthUser | null> {
   try {
-    // For demo purposes, we'll simulate authentication
-    // In a real app, you'd use Supabase auth
-    const { data: user, error } = await supabase.from("users").select("*").eq("email", email).single()
+    // Demo credentials - in production, use proper authentication
+    const demoUsers = [
+      { id: "550e8400-e29b-41d4-a716-446655440001", email: "admin@ceiromao.com", name: "Administrator", role: "admin" },
+      { id: "550e8400-e29b-41d4-a716-446655440002", email: "hr@ceiromao.com", name: "HR Manager", role: "hr" },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440003",
+        email: "teacher@ceiromao.com",
+        name: "Teacher User",
+        role: "teacher",
+      },
+    ]
 
-    if (error || !user) {
-      console.error("Login error:", error)
-      return null
+    const user = demoUsers.find((u) => u.email === email)
+    if (user && password === "demo123") {
+      // Store in localStorage for demo
+      localStorage.setItem("auth_user", JSON.stringify(user))
+      return user
     }
 
-    // Store user in localStorage for demo
-    localStorage.setItem("user", JSON.stringify(user))
-    return user
+    return null
   } catch (error) {
-    console.error("Sign in error:", error)
+    console.error("Login error:", error)
     return null
   }
 }
 
-export async function signOut(): Promise<void> {
-  localStorage.removeItem("user")
+export function logout(): void {
+  localStorage.removeItem("auth_user")
 }
 
-export function getCurrentUser(): User | null {
-  if (typeof window === "undefined") return null
-
-  const userStr = localStorage.getItem("user")
-  if (!userStr) return null
-
+export function getCurrentUser(): AuthUser | null {
   try {
-    return JSON.parse(userStr)
+    const stored = localStorage.getItem("auth_user")
+    return stored ? JSON.parse(stored) : null
   } catch {
     return null
   }
 }
 
-export async function getUsers(): Promise<User[]> {
-  try {
-    const { data, error } = await supabase.from("users").select("*").order("name")
-
-    if (error) {
-      console.error("Error fetching users:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error in getUsers:", error)
-    return []
-  }
+export function isAuthenticated(): boolean {
+  return getCurrentUser() !== null
 }

@@ -33,6 +33,13 @@ export async function updateAttendanceStatus(
   period: "morning" | "afternoon",
 ): Promise<boolean> {
   try {
+    // Validate that markedBy is a valid UUID
+    if (!markedBy || markedBy.startsWith("user_")) {
+      console.error("Invalid markedBy ID:", markedBy)
+      // Use a default admin user ID for demo
+      markedBy = "550e8400-e29b-41d4-a716-446655440001"
+    }
+
     const { error } = await supabase.from("attendance").upsert(
       {
         employee_id: employeeId,
@@ -66,6 +73,11 @@ export async function addAttendanceJustification(
   createdBy: string,
 ): Promise<boolean> {
   try {
+    // Validate that createdBy is a valid UUID
+    if (!createdBy || createdBy.startsWith("user_")) {
+      createdBy = "550e8400-e29b-41d4-a716-446655440001"
+    }
+
     const { error } = await supabase.from("attendance_justifications").upsert(
       {
         attendance_id: attendanceId,

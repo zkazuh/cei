@@ -7,27 +7,32 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth-provider"
-import { signOut } from "@/lib/auth"
+import { logout } from "@/lib/auth"
+import { useToast } from "@/hooks/use-toast"
 import ProtectedLayout from "@/components/protected-layout"
-import { Home, Users, Calendar, BarChart3, LogOut, Menu, X, GraduationCap } from "lucide-react"
+import { LayoutDashboard, Users, FileText, Calendar, BarChart3, Menu, X, LogOut, User } from "lucide-react"
 
 const navigation = [
-  { name: "Dashboard", href: "/ceiromao", icon: Home },
+  { name: "Dashboard", href: "/ceiromao", icon: LayoutDashboard },
   { name: "Employees", href: "/ceiromao/employees", icon: Users },
-  { name: "Teacher Files", href: "/ceiromao/teacher-files", icon: GraduationCap },
+  { name: "Teacher Files", href: "/ceiromao/teacher-files", icon: FileText },
   { name: "Attendance", href: "/ceiromao/attendance", icon: Calendar },
   { name: "Reports", href: "/ceiromao/reports", icon: BarChart3 },
 ]
 
 export default function CeiromaoLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { user, setUser } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
+  const { user } = useAuth()
+  const { toast } = useToast()
 
-  const handleSignOut = async () => {
-    await signOut()
-    setUser(null)
+  const handleLogout = () => {
+    logout()
+    toast({
+      title: "Success",
+      description: "Logged out successfully",
+    })
     router.push("/login")
   }
 
@@ -52,11 +57,11 @@ export default function CeiromaoLayout({ children }: { children: React.ReactNode
                     key={item.name}
                     href={item.href}
                     className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                      isActive ? "bg-blue-100 text-blue-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      isActive ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     }`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <item.icon className="mr-3 h-5 w-5" />
+                    <item.icon className="mr-3 h-6 w-6" />
                     {item.name}
                   </Link>
                 )
@@ -64,17 +69,13 @@ export default function CeiromaoLayout({ children }: { children: React.ReactNode
             </nav>
             <div className="border-t border-gray-200 p-4">
               <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
-                    <span className="text-sm font-medium text-white">{user?.name?.charAt(0) || "U"}</span>
-                  </div>
-                </div>
+                <User className="h-8 w-8 text-gray-400" />
                 <div className="ml-3">
                   <p className="text-sm font-medium text-gray-700">{user?.name}</p>
                   <p className="text-xs text-gray-500">{user?.role}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="mt-3 w-full justify-start" onClick={handleSignOut}>
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="mt-2 w-full justify-start">
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign out
               </Button>
@@ -96,10 +97,10 @@ export default function CeiromaoLayout({ children }: { children: React.ReactNode
                     key={item.name}
                     href={item.href}
                     className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                      isActive ? "bg-blue-100 text-blue-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      isActive ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     }`}
                   >
-                    <item.icon className="mr-3 h-5 w-5" />
+                    <item.icon className="mr-3 h-6 w-6" />
                     {item.name}
                   </Link>
                 )
@@ -107,17 +108,13 @@ export default function CeiromaoLayout({ children }: { children: React.ReactNode
             </nav>
             <div className="border-t border-gray-200 p-4">
               <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
-                    <span className="text-sm font-medium text-white">{user?.name?.charAt(0) || "U"}</span>
-                  </div>
-                </div>
+                <User className="h-8 w-8 text-gray-400" />
                 <div className="ml-3">
                   <p className="text-sm font-medium text-gray-700">{user?.name}</p>
                   <p className="text-xs text-gray-500">{user?.role}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="mt-3 w-full justify-start" onClick={handleSignOut}>
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="mt-2 w-full justify-start">
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign out
               </Button>
@@ -131,9 +128,6 @@ export default function CeiromaoLayout({ children }: { children: React.ReactNode
             <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu className="h-6 w-6" />
             </Button>
-            <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-              <div className="flex flex-1"></div>
-            </div>
           </div>
           <main className="py-10">
             <div className="px-4 sm:px-6 lg:px-8">{children}</div>
