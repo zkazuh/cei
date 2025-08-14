@@ -1,159 +1,198 @@
 "use client"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useAuth } from "@/components/auth-provider"
-import { Users, Calendar, FileText, BarChart3, GraduationCap } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { getEmployeeStats } from "@/lib/employee-management"
+import { getFileStats } from "@/lib/teacher-files"
+import {
+  Users,
+  UserCheck,
+  UserX,
+  GraduationCap,
+  FileText,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  TrendingUp,
+} from "lucide-react"
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const [employeeStats, setEmployeeStats] = useState({
+    total: 0,
+    active: 0,
+    inactive: 0,
+    byCategory: {} as Record<string, number>,
+    byDepartment: {} as Record<string, number>,
+  })
+  const [fileStats, setFileStats] = useState({
+    total: 0,
+    pending: 0,
+    submitted: 0,
+    overdue: 0,
+  })
+  const [isLoading, setIsLoading] = useState(true)
 
-  const stats = [
-    {
-      title: "Total Employees",
-      value: "156",
-      description: "Active employees",
-      icon: Users,
-      color: "text-blue-600",
-    },
-    {
-      title: "Present Today",
-      value: "142",
-      description: "91% attendance rate",
-      icon: Calendar,
-      color: "text-green-600",
-    },
-    {
-      title: "Pending Files",
-      value: "23",
-      description: "Teacher submissions",
-      icon: GraduationCap,
-      color: "text-purple-600",
-    },
-    {
-      title: "Activity Hours",
-      value: "1,247",
-      description: "This month",
-      icon: FileText,
-      color: "text-orange-600",
-    },
-  ]
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const [empStats, fStats] = await Promise.all([getEmployeeStats(), getFileStats()])
+      setEmployeeStats(empStats)
+      setFileStats(fStats)
+    } catch (error) {
+      console.error("Error loading dashboard data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back, {user?.name}! Here's what's happening at Ceiromao today.</p>
+        <p className="text-muted-foreground">Overview of your HR system</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          return (
-            <Card key={stat.title}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                <Icon className={`h-4 w-4 ${stat.color}`} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">{stat.description}</p>
-              </CardContent>
-            </Card>
-          )
-        })}
+      {/* Employee Stats */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          Employee Overview
+        </h2>
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{employeeStats.total}</div>
+              <p className="text-xs text-muted-foreground">All employees</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active</CardTitle>
+              <UserCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{employeeStats.active}</div>
+              <p className="text-xs text-muted-foreground">Currently working</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Inactive</CardTitle>
+              <UserX className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{employeeStats.inactive}</div>
+              <p className="text-xs text-muted-foreground">Not currently working</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Teachers</CardTitle>
+              <GraduationCap className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600">{employeeStats.byCategory.teacher || 0}</div>
+              <p className="text-xs text-muted-foreground">Teaching staff</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Today's Attendance
-            </CardTitle>
-            <CardDescription>Quick overview of today's attendance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm">Present</span>
-                <span className="text-sm font-medium">142 employees</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">Absent</span>
-                <span className="text-sm font-medium">8 employees</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">Late</span>
-                <span className="text-sm font-medium">6 employees</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* File Stats */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          Teacher Files Overview
+        </h2>
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Requirements</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{fileStats.total}</div>
+              <p className="text-xs text-muted-foreground">All file requirements</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <GraduationCap className="h-5 w-5" />
-              Teacher Files Status
-            </CardTitle>
-            <CardDescription>Monthly file submission status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm">Submitted</span>
-                <span className="text-sm font-medium text-green-600">12 files</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">Pending</span>
-                <span className="text-sm font-medium text-yellow-600">23 files</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm">Overdue</span>
-                <span className="text-sm font-medium text-red-600">3 files</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Submitted</CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{fileStats.submitted}</div>
+              <p className="text-xs text-muted-foreground">Files submitted</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-yellow-600">{fileStats.pending}</div>
+              <p className="text-xs text-muted-foreground">Awaiting submission</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Overdue</CardTitle>
+              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{fileStats.overdue}</div>
+              <p className="text-xs text-muted-foreground">Past due date</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Recent Activity */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Recent Activity
-          </CardTitle>
-          <CardDescription>Latest updates and activities</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Maria Silva submitted monthly report</p>
-                <p className="text-xs text-muted-foreground">2 hours ago</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">New employee Carlos Santos added</p>
-                <p className="text-xs text-muted-foreground">4 hours ago</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">Attendance report generated</p>
-                <p className="text-xs text-muted-foreground">6 hours ago</p>
-              </div>
-            </div>
+      {/* Department Breakdown */}
+      {Object.keys(employeeStats.byDepartment).length > 0 && (
+        <div>
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Department Breakdown
+          </h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {Object.entries(employeeStats.byDepartment).map(([department, count]) => (
+              <Card key={department}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{department}</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{count}</div>
+                  <p className="text-xs text-muted-foreground">employees</p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   )
 }

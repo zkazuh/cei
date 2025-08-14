@@ -59,6 +59,7 @@ export default function EmployeesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [formData, setFormData] = useState({
+    employee_number: "",
     name: "",
     position: "",
     department: "",
@@ -130,6 +131,7 @@ export default function EmployeesPage() {
   const handleEdit = (employee: Employee) => {
     setEditingEmployee(employee)
     setFormData({
+      employee_number: employee.employee_number,
       name: employee.name,
       position: employee.position,
       department: employee.department,
@@ -163,6 +165,7 @@ export default function EmployeesPage() {
 
   const resetForm = () => {
     setFormData({
+      employee_number: "",
       name: "",
       position: "",
       department: "",
@@ -255,6 +258,18 @@ export default function EmployeesPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit}>
               <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="employee_number" className="text-right">
+                    Employee #
+                  </Label>
+                  <Input
+                    id="employee_number"
+                    value={formData.employee_number}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, employee_number: e.target.value }))}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="name" className="text-right">
                     Name
@@ -504,7 +519,7 @@ export default function EmployeesPage() {
                         {employee.position} • {employee.department}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Hired: {new Date(employee.hire_date).toLocaleDateString()}
+                        #{employee.employee_number} • Hired: {new Date(employee.hire_date).toLocaleDateString()}
                       </p>
                     </div>
                   </div>

@@ -1,56 +1,5 @@
 import { supabase } from "./supabase"
-import type { MonthlyFileRequirement, ActivityFile, Employee } from "./supabase"
-
-export interface MonthlyFileRequirementWithDetails extends MonthlyFileRequirement {
-  employee: Employee
-  activity_file: ActivityFile | null
-}
-
-export async function getMonthlyFileRequirements(
-  year?: number,
-  month?: number,
-  status?: string,
-  employeeId?: string,
-): Promise<MonthlyFileRequirementWithDetails[]> {
-  try {
-    let query = supabase
-      .from("monthly_file_requirements")
-      .select(`
-        *,
-        employee:employees(*),
-        activity_file:activity_files(*)
-      `)
-      .order("due_date", { ascending: false })
-
-    if (year) {
-      query = query.eq("year", year)
-    }
-
-    if (month) {
-      query = query.eq("month", month)
-    }
-
-    if (status && status !== "all") {
-      query = query.eq("status", status)
-    }
-
-    if (employeeId) {
-      query = query.eq("employee_id", employeeId)
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-      console.error("Error fetching monthly file requirements:", error)
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    console.error("Error in getMonthlyFileRequirements:", error)
-    return []
-  }
-}
+import type { Employee, MonthlyFileRequirement } from "./supabase"
 
 export async function getTeachers(): Promise<Employee[]> {
   try {
@@ -73,57 +22,69 @@ export async function getTeachers(): Promise<Employee[]> {
   }
 }
 
-export async function createMonthlyRequirements(year: number, month: number): Promise<boolean> {
+export async function getMonthlyFileRequirements(filters?: {
+  year?: number
+  month?: number
+  status?: string
+  teacherId?: string
+}): Promise<MonthlyFileRequirement[]> {
   try {
-    const { data, error } = await supabase.rpc("create_monthly_requirements_for_teachers", {
-      target_year: year,
-      target_month: month,
-    })
+    let query = supabase
+      .from("monthly_file_requirements")
+      .select(`
+        *,
+        employee:employees(*),
+        activity_file:activity_files(*)
+      `)
+      .order("due_date", { ascending: false })
 
-    if (error) {
-      console.error("Error creating monthly requirements:", error)
-      return false
+    if (filters?.year) {
+      query = query.eq("year", filters.year)
+    }
+    if (filters?.month) {
+      query = query.eq("month", filters.month)
+    }
+    if (filters?.status && filters.status !== "all") {
+      query = query.eq("status", filters.status)
+    }
+    if (filters?.teacherId && filters.teacherId !== "all") {
+      query = query.eq("employee_id", filters.teacherId)
     }
 
-    return true
+    const { data, error } = await query
+
+    if (error) {
+      console.error("Error fetching monthly file requirements:", error)
+      return []
+    }
+
+    return data || []
   } catch (error) {
-    console.error("Error in createMonthlyRequirements:", error)
-    return false
+    console.error("Error in getMonthlyFileRequirements:", error)
+    return []
   }
 }
 
-export async function updateOverdueRequirements(): Promise<boolean> {
+export async function uploadActivityFile(
+  employeeId: string,
+  file: File,
+  year: number,
+  month: number,
+): Promise<boolean> {
   try {
-    const { data, error } = await supabase.rpc("update_overdue_requirements")
-
-    if (error) {
-      console.error("Error updating overdue requirements:", error)
-      return false
+    // In a real implementation, you would upload to Supabase Storage
+    // For now, we'll simulate the file upload
+    const mockFileData = {
+      employee_id: employeeId,
+      filename: file.name,
+      file_path: `/uploads/${employeeId}/${year}/${month}/${file.name}`,
+      file_size: file.size,
+      mime_type: file.type,
     }
-
-    return true
-  } catch (error) {
-    console.error("Error in updateOverdueRequirements:", error)
-    return false
-  }
-}
-
-export async function uploadTeacherFile(requirementId: string, file: File, employeeId: string): Promise<boolean> {
-  try {
-    // First, create the activity file record
-    const fileName = file.name
-    const filePath = `teacher-files/${employeeId}/${Date.now()}_${fileName}`
 
     const { data: activityFile, error: fileError } = await supabase
       .from("activity_files")
-      .insert({
-        employee_id: employeeId,
-        filename: fileName,
-        file_path: filePath,
-        file_size: file.size,
-        mime_type: file.type,
-        upload_date: new Date().toISOString(),
-      })
+      .insert(mockFileData)
       .select()
       .single()
 
@@ -140,77 +101,115 @@ export async function uploadTeacherFile(requirementId: string, file: File, emplo
         submitted_at: new Date().toISOString(),
         activity_file_id: activityFile.id,
       })
-      .eq("id", requirementId)
+      .eq("employee_id", employeeId)
+      .eq("year", year)
+      .eq("month", month)
 
     if (updateError) {
-      console.error("Error updating requirement:", updateError)
+      console.error("Error updating monthly requirement:", updateError)
       return false
     }
 
     return true
   } catch (error) {
-    console.error("Error in uploadTeacherFile:", error)
+    console.error("Error in uploadActivityFile:", error)
     return false
   }
 }
 
-export async function downloadTeacherFile(fileId: string): Promise<void> {
+export async function downloadActivityFile(fileId: string): Promise<Blob | null> {
   try {
-    // Get file information
-    const { data: file, error } = await supabase.from("activity_files").select("*").eq("id", fileId).single()
+    // In a real implementation, you would download from Supabase Storage
+    // For now, we'll generate a mock PDF file
+    const mockPdfContent = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
 
-    if (error || !file) {
-      throw new Error("File not found")
-    }
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
 
-    // For demo purposes, create a mock file download
-    // In production, you would download from Supabase Storage
-    const mockFileContent = `Demo File: ${file.filename}
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+>>
+endobj
 
-This is a demonstration file for the Ceiromao HR Portal.
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+(Monthly Activity Report) Tj
+ET
+endstream
+endobj
 
-File Details:
-- Original Name: ${file.filename}
-- Upload Date: ${new Date(file.upload_date).toLocaleString()}
-- File Size: ${formatFileSize(file.file_size)}
-- MIME Type: ${file.mime_type}
-- Employee ID: ${file.employee_id}
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000206 00000 n 
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+300
+%%EOF`
 
-In a production environment, this would be the actual file content 
-downloaded from your file storage system (like Supabase Storage, AWS S3, etc.).
-
-This demo file was generated on: ${new Date().toLocaleString()}
-`
-
-    const blob = new Blob([mockFileContent], { type: file.mime_type || "text/plain" })
-    const url = URL.createObjectURL(blob)
-
-    const link = document.createElement("a")
-    link.href = url
-    link.download = file.filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    return new Blob([mockPdfContent], { type: "application/pdf" })
   } catch (error) {
-    console.error("Error downloading file:", error)
-    throw error
+    console.error("Error in downloadActivityFile:", error)
+    return null
   }
 }
 
-export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes"
-  const k = 1024
-  const sizes = ["Bytes", "KB", "MB", "GB"]
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-}
+export async function getFileStats(): Promise<{
+  total: number
+  pending: number
+  submitted: number
+  overdue: number
+}> {
+  try {
+    const { data, error } = await supabase.from("monthly_file_requirements").select("status")
 
-export function getFileIcon(mimeType: string): string {
-  if (mimeType.includes("pdf")) return "📄"
-  if (mimeType.includes("word") || mimeType.includes("document")) return "📝"
-  if (mimeType.includes("image")) return "🖼️"
-  if (mimeType.includes("excel") || mimeType.includes("spreadsheet")) return "📊"
-  if (mimeType.includes("powerpoint") || mimeType.includes("presentation")) return "📋"
-  return "📎"
+    if (error) {
+      console.error("Error fetching file stats:", error)
+      return { total: 0, pending: 0, submitted: 0, overdue: 0 }
+    }
+
+    const stats = {
+      total: data?.length || 0,
+      pending: 0,
+      submitted: 0,
+      overdue: 0,
+    }
+
+    data?.forEach((req) => {
+      stats[req.status as keyof typeof stats]++
+    })
+
+    return stats
+  } catch (error) {
+    console.error("Error in getFileStats:", error)
+    return { total: 0, pending: 0, submitted: 0, overdue: 0 }
+  }
 }
