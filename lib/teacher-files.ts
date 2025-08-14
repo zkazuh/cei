@@ -144,6 +144,28 @@ export async function uploadFile(
     // Simulate upload delay
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
+    // Create file record in database
+    const dueDate = new Date(year, month, 10).toISOString().split("T")[0]
+
+    const { error } = await supabase.from("activity_files").insert({
+      employee_id: employeeId,
+      file_name: file.name,
+      file_path: filePath,
+      file_size: file.size,
+      file_type: file.type,
+      requirement_type: requirementType,
+      month: month,
+      year: year,
+      due_date: dueDate,
+      status: "submitted",
+      submitted_at: new Date().toISOString(),
+    })
+
+    if (error) {
+      console.error("Error creating file record:", error)
+      return null
+    }
+
     // Return simulated file path
     return filePath
   } catch (error) {
@@ -268,5 +290,144 @@ export async function bulkCreateFileRequirements(requirements: FileRequirement[]
   } catch (error) {
     console.error("Error in bulkCreateFileRequirements:", error)
     return false
+  }
+}
+
+export async function getFilesByStatus(status: string): Promise<TeacherFileWithEmployee[]> {
+  try {
+    const { data, error } = await supabase
+      .from("activity_files")
+      .select(`
+        *,
+        employees!inner (
+          id,
+          name,
+          employee_number,
+          department,
+          position,
+          category
+        )
+      `)
+      .eq("status", status)
+      .eq("employees.category", "teacher")
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching files by status:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getFilesByStatus:", error)
+    return []
+  }
+}
+
+export async function getOverdueFiles(): Promise<TeacherFileWithEmployee[]> {
+  try {
+    const now = new Date().toISOString().split("T")[0]
+
+    const { data, error } = await supabase
+      .from("activity_files")
+      .select(`
+        *,
+        employees!inner (
+          id,
+          name,
+          employee_number,
+          department,
+          position,
+          category
+        )
+      `)
+      .eq("status", "pending")
+      .eq("employees.category", "teacher")
+      .lt("due_date", now)
+      .order("due_date", { ascending: true })
+
+    if (error) {
+      console.error("Error fetching overdue files:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error in getOverdueFiles:", error)
+    return []
+  }
+}
+
+export async function updateFileMetadata(
+  fileId: string,
+  metadata: {
+    file_name?: string
+    requirement_type?: string
+    due_date?: string
+    month?: number
+    year?: number
+  },
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("activity_files")
+      .update({
+        ...metadata,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", fileId)
+
+    if (error) {
+      console.error("Error updating file metadata:", error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error in updateFileMetadata:", error)
+    return false
+  }
+}
+
+export async function getFileStatsByEmployee(employeeId: string): Promise<FileStats> {
+  try {
+    const { data, error } = await supabase
+      .from("activity_files")
+      .select("status, due_date")
+      .eq("employee_id", employeeId)
+
+    if (error) {
+      console.error("Error fetching file stats by employee:", error)
+      return { total: 0, pending: 0, submitted: 0, overdue: 0 }
+    }
+
+    if (!data || data.length === 0) {
+      return { total: 0, pending: 0, submitted: 0, overdue: 0 }
+    }
+
+    const now = new Date()
+    const stats: FileStats = {
+      total: data.length,
+      pending: 0,
+      submitted: 0,
+      overdue: 0,
+    }
+
+    data.forEach((file) => {
+      if (file.status === "submitted") {
+        stats.submitted++
+      } else if (file.status === "pending") {
+        if (file.due_date && new Date(file.due_date) < now) {
+          stats.overdue++
+        } else {
+          stats.pending++
+        }
+      }
+    })
+
+    return stats
+  } catch (error) {
+    console.error("Error in getFileStatsByEmployee:", error)
+    return { total: 0, pending: 0, submitted: 0, overdue: 0 }
   }
 }
